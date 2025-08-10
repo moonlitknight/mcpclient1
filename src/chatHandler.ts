@@ -1,10 +1,10 @@
-import { Context, HonoRequest } from 'hono';
+
 import { processChat } from './services/openaiService';
 import { validateSupabaseJWT } from './services/supabaseService';
 import { logger } from './logger';
 import { ChatRequest, ChatResponse } from './types';
 
-export async function handleChatRequest(req: HonoRequest) {
+export async function handleChatRequest(req: any) {
   try {
     // Validate request
 

@@ -1,7 +1,7 @@
 import { initializeConfig } from './config';
 import { logger } from './logger';
 import { gracefulShutdown } from './shutdown';
-import { createHonoApp } from './server';
+import { createApp } from './server';
 // import from hono 
 
 async function main() {
@@ -9,8 +9,11 @@ async function main() {
   const config = await initializeConfig();
 
   // Create and start Hono server
-  const app = createHonoApp(config);
-  app.fire();
+  const app = createApp(config);
+  // fix the line below to remove the no overload error
+  app.listen(config.httpPort, () => {
+    logger.info(`Server is running on port ${config.httpPort}`);
+  })
 
   // Graceful shutdown
   process.on('SIGTERM', () => gracefulShutdown(app));
