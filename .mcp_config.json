@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--read-only",
+        "--project-ref=<project-ref>"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "<personal-access-token>",
+        "SUPABASE_PROJECT_REF": "dummyref123",
+        "DATABASE_URL": "https://dummy.supabase.co",
+        "SUPABASE_ANON_KEY": "dummyanonkey123"
+      }
+    }
+  }
+}
