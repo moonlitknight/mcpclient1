@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { logger } from './logger';
 import { handleChatRequest } from './chatHandler';
 import { Config } from './config';
@@ -17,6 +17,9 @@ export function createApp(config: Config) {
   app.post('/chat', express.json(), async (req, res) => {
     // fix the line below to use the correct type for the request body
     const result = await handleChatRequest(req);
+    res.status(result.status);
+    res.json(result.body);
+    res.end();
     return result.body;
   });
 

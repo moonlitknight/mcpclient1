@@ -3,7 +3,7 @@
 ## 1. Overview
 **Project Name**: MCP Client  
 **Description**: An MCP client that exposes an http server which accepts chat requests in a JSON payload, and return chat responses in JSON, uses OpenAI for its LLM, and can be configured with MCP servers
-**Tech Stack**: TypeScript, Jest (testing), Supabase integration  , Hono for the API
+**Tech Stack**: TypeScript, Jest (testing), Supabase integration  , express for the API
 
 ## 2. Core Features
 ### 2.1 Supabase Integration
