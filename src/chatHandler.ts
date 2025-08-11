@@ -23,18 +23,13 @@ export async function handleChatRequest(req: Request): Promise<{ status: number,
 
     let userId: string;
 
-    if (supabase_jwt === 'test') {
-      userId = 'test';
-    } else {
-      const isJwtValid = await validateSupabaseJWT(supabase_jwt);
-      if (!isJwtValid) {
-        return {
-          status: 401,
-          body: { error: 'Invalid Supabase JWT' }
-        };
-      }
+    const isJwtValid = await validateSupabaseJWT(supabase_jwt);
+
+    if (isJwtValid) {
       const decodedToken = jwtDecode<DecodedToken>(supabase_jwt);
       userId = decodedToken.email;
+    } else {
+      userId = supabase_jwt;
     }
 
     const config = getConfig();

@@ -57,14 +57,17 @@ describe('Server', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should return 401 for a request with an invalid JWT', async () => {
+    it('should use the provided string as userId if JWT is invalid', async () => {
       mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(false);
+      mockedOpenaiService.processChat.mockResolvedValue('Test response');
 
       const res = await request(app)
         .post('/chat')
-        .send({ text: 'Hello', supabase_jwt: 'invalid.jwt.token' });
+        .send({ text: 'Hello', supabase_jwt: 'not-a-jwt' });
 
-      expect(res.status).toBe(401);
+      expect(res.status).toBe(200);
+      expect(res.body.response).toBe('Test response');
+      expect(mockedOpenaiService.processChat).toHaveBeenCalledWith('Hello', 'not-a-jwt', config);
     });
 
     it('should return 500 if openaiService fails', async () => {
@@ -77,18 +80,6 @@ describe('Server', () => {
         .send({ text: 'Hello', supabase_jwt: 'valid.jwt.token' });
 
       expect(res.status).toBe(500);
-    });
-
-    it('should bypass JWT validation for "test" jwt', async () => {
-      mockedOpenaiService.processChat.mockResolvedValue('Test response');
-
-      const res = await request(app)
-        .post('/chat')
-        .send({ text: 'Hello', supabase_jwt: 'test' });
-
-      expect(res.status).toBe(200);
-      expect(mockedSupabaseService.validateSupabaseJWT).not.toHaveBeenCalled();
-      expect(mockedOpenaiService.processChat).toHaveBeenCalledWith('Hello', 'test', config);
     });
   });
 });
