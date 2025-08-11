@@ -7,6 +7,10 @@ export interface Config {
   httpPort: number;
   openaiKey: string;
   llmTemperature: number;
+  maxTokens: number;
+  topP: number;
+  presencePenalty: number;
+  frequencyPenalty: number;
   supabaseUrl: string;
   supabaseAnonKey: string;
   supabaseProjectRef: string;
@@ -17,6 +21,10 @@ let config: Config =
   httpPort: 3001,
   openaiKey: '',
   llmTemperature: 0.66,
+  maxTokens: 150,
+  topP: 1.0,
+  presencePenalty: 0.0,
+  frequencyPenalty: 0.0,
   supabaseUrl: '',
   supabaseAnonKey: '',
   supabaseProjectRef: ''
@@ -39,6 +47,10 @@ export async function initializeConfig(): Promise<Config> {
     config.httpPort = parseInt(process.env.HTTP_PORT || '3001');
     config.openaiKey = process.env.OPENAI_KEY || '';
     config.llmTemperature = parseFloat(process.env.LLM_TEMPERATURE || '0.66');
+    config.maxTokens = parseInt(process.env.MAX_TOKENS || '150');
+    config.topP = parseFloat(process.env.TOP_P || '1.0');
+    config.presencePenalty = parseFloat(process.env.PRESENCE_PENALTY || '0.0');
+    config.frequencyPenalty = parseFloat(process.env.FREQUENCY_PENALTY || '0.0');
     config.supabaseUrl = supabaseEnv.DATABASE_URL || '';
     config.supabaseAnonKey = supabaseEnv.SUPABASE_ANON_KEY || '';
     config.supabaseProjectRef = supabaseEnv.SUPABASE_PROJECT_REF || '';

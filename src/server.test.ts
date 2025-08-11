@@ -42,6 +42,7 @@ describe('Server', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.response).toBe('Test response');
+      expect(mockedOpenaiService.processChat).toHaveBeenCalledWith('Hello', config);
     });
 
     it('should return 400 for a request with missing text', async () => {

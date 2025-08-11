@@ -1,10 +1,9 @@
 import OpenAI from 'openai';
-import { getConfig } from '../config';
+import { Config } from '../config';
 import { logger } from '../logger';
 
-export async function processChat(prompt: string): Promise<string> {
+export async function processChat(prompt: string, config: Config): Promise<string> {
   try {
-    const config = getConfig();
     const openai = new OpenAI({
       apiKey: config.openaiKey
     });
@@ -15,7 +14,11 @@ export async function processChat(prompt: string): Promise<string> {
         { role: 'system', content: 'You are a helpful assistant.' },
         { role: 'user', content: prompt }
       ],
-      temperature: config.llmTemperature
+      temperature: config.llmTemperature,
+      max_tokens: config.maxTokens,
+      top_p: config.topP,
+      presence_penalty: config.presencePenalty,
+      frequency_penalty: config.frequencyPenalty
     });
 
     return completion.choices[0]?.message?.content || '';

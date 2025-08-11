@@ -52,6 +52,10 @@ It will provide extensive `console.log` logging to demonstrate its internal stat
 HTTP_PORT=3001
 OPENAI_KEY=
 LLM_TEMPERATURE=0.66
+MAX_TOKENS=150
+TOP_P=1.0
+PRESENCE_PENALTY=0.0
+FREQUENCY_PENALTY=0.0
 ```
 
 ### 7.2 `.mcp_config.json` Example

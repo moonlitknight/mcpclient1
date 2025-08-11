@@ -3,6 +3,7 @@ import { processChat } from './services/openaiService';
 import { validateSupabaseJWT } from './services/supabaseService';
 import { logger } from './logger';
 import { ChatRequest, ChatResponse } from './types';
+import { getConfig } from './config';
 
 export async function handleChatRequest(req: Request): Promise<{ status: number, body: any }> {
   try {
@@ -25,7 +26,8 @@ export async function handleChatRequest(req: Request): Promise<{ status: number,
       }
     }
 
-    const openAiResponse = await processChat(text);
+    const config = getConfig();
+    const openAiResponse = await processChat(text, config);
 
     const response: ChatResponse = {
       response: openAiResponse,
