@@ -9,14 +9,13 @@ async function main() {
 
   // Create and start express server
   const app = createApp(config);
-  // fix the line below to remove the no overload error
-  app.listen(config.httpPort, () => {
+  const server = app.listen(config.httpPort, () => {
     logger.info(`Server is running on port ${config.httpPort}`);
-  })
+  });
 
   // Graceful shutdown
-  process.on('SIGTERM', () => gracefulShutdown(app));
-  process.on('SIGINT', () => gracefulShutdown(app));
+  process.on('SIGTERM', () => gracefulShutdown(server));
+  process.on('SIGINT', () => gracefulShutdown(server));
 }
 
 main().catch((error) => {

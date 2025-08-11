@@ -23,27 +23,12 @@ let config: Config =
 };
 
 export async function initializeConfig(): Promise<Config> {
-  let config: Config =
-  {
-    httpPort: 3001,
-    openaiKey: '',
-    llmTemperature: 0.66,
-    supabaseUrl: '',
-    supabaseAnonKey: '',
-    supabaseProjectRef: ''
-  };
   // Load .env file
   dotenv.config();
 
   // Load MCP config
   const mcpConfigPath = path.join(process.cwd(), '.mcp_config.json');
-  let mcpConfig = {
-    mcpServers: {
-      supabase: {
-        env: {}
-      }
-    }
-  };
+  let mcpConfig: any = {};
 
   if (fs.existsSync(mcpConfigPath)) {
     mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
@@ -51,18 +36,26 @@ export async function initializeConfig(): Promise<Config> {
 
   try {
     const supabaseEnv = mcpConfig.mcpServers?.supabase?.env || {};
-    config = {
-      httpPort: parseInt(process.env.HTTP_PORT || '3001'),
-      openaiKey: process.env.OPENAI_KEY || '',
-      llmTemperature: parseFloat(process.env.LLM_TEMPERATURE || '0.66'),
-      supabaseUrl: '',
-      supabaseAnonKey: '',
-      supabaseProjectRef: ''
-    };
+    config.httpPort = parseInt(process.env.HTTP_PORT || '3001');
+    config.openaiKey = process.env.OPENAI_KEY || '';
+    config.llmTemperature = parseFloat(process.env.LLM_TEMPERATURE || '0.66');
+    config.supabaseUrl = supabaseEnv.DATABASE_URL || '';
+    config.supabaseAnonKey = supabaseEnv.SUPABASE_ANON_KEY || '';
+    config.supabaseProjectRef = supabaseEnv.SUPABASE_PROJECT_REF || '';
+
 
     // Validate required config
     if (!config.openaiKey) {
       throw new Error('OPENAI_KEY is required in .env');
+    }
+    if (!config.supabaseUrl) {
+      throw new Error('DATABASE_URL is required in .mcp_config.json');
+    }
+    if (!config.supabaseAnonKey) {
+      throw new Error('SUPABASE_ANON_KEY is required in .mcp_config.json');
+    }
+    if (!config.supabaseProjectRef) {
+      throw new Error('SUPABASE_PROJECT_REF is required in .mcp_config.json');
     }
 
     logger.info('Configuration initialized');

@@ -2,14 +2,13 @@ import { createClient } from '@supabase/supabase-js';
 import { getConfig } from '../config';
 import { logger } from '../logger';
 
-const config = getConfig();
-const supabase = createClient(
-  config.supabaseUrl,
-  config.supabaseAnonKey
-);
-
 export async function validateSupabaseJWT(jwt: string): Promise<boolean> {
   try {
+    const config = getConfig();
+    const supabase = createClient(
+      config.supabaseUrl,
+      config.supabaseAnonKey
+    );
     const { data: { user }, error } = await supabase.auth.getUser(jwt);
 
     if (error) {
