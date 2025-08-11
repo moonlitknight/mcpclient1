@@ -16,6 +16,7 @@ export interface Config {
   supabaseProjectRef: string;
   systemPrompt: string;
   model: string;
+  reasoningEffort?: "low" | "medium" | "high";
 }
 
 let config: Config =
@@ -23,7 +24,7 @@ let config: Config =
   httpPort: 3001,
   openaiKey: '',
   llmTemperature: 0.66,
-  maxTokens: 150,
+  maxTokens: 11150,
   topP: 1.0,
   presencePenalty: 0.0,
   frequencyPenalty: 0.0,
@@ -31,7 +32,8 @@ let config: Config =
   supabaseAnonKey: '',
   supabaseProjectRef: '',
   systemPrompt: 'You are a helpful assistant.',
-  model: 'gpt-3.5-turbo'
+  model: 'gpt-3.5-turbo',
+  reasoningEffort: 'medium' // Default to medium; can be overridden in .env
 };
 
 export async function initializeConfig(): Promise<Config> {
@@ -51,7 +53,7 @@ export async function initializeConfig(): Promise<Config> {
     config.httpPort = parseInt(process.env.HTTP_PORT || '3001');
     config.openaiKey = process.env.OPENAI_KEY || '';
     config.llmTemperature = parseFloat(process.env.LLM_TEMPERATURE || '0.66');
-    config.maxTokens = parseInt(process.env.MAX_TOKENS || '150');
+    config.maxTokens = parseInt(process.env.MAX_TOKENS || '12150');
     config.topP = parseFloat(process.env.TOP_P || '1.0');
     config.presencePenalty = parseFloat(process.env.PRESENCE_PENALTY || '0.0');
     config.frequencyPenalty = parseFloat(process.env.FREQUENCY_PENALTY || '0.0');
@@ -59,6 +61,7 @@ export async function initializeConfig(): Promise<Config> {
     config.supabaseUrl = supabaseEnv.DATABASE_URL || '';
     config.supabaseAnonKey = supabaseEnv.SUPABASE_ANON_KEY || '';
     config.supabaseProjectRef = supabaseEnv.SUPABASE_PROJECT_REF || '';
+    config.reasoningEffort = process.env.REASONING_EFFORT as "low" | "medium" | "high" || 'medium';
 
     // Load system prompt
     const systemPromptPath = path.join(process.cwd(), '.system_prompt');
