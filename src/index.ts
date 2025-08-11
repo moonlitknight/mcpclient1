@@ -20,7 +20,11 @@ async function main() {
 
   // Create and start express server
   const app = createApp(config);
-  const server = app.listen(config.httpPort, () => {
+  const server = app.listen(config.httpPort, (err) => {
+    if (!!err) {
+      logger.error('Failed to start server:', err);
+      process.exit(1);
+    }
     logger.info(`Server is running on port ${config.httpPort}`);
   });
 
