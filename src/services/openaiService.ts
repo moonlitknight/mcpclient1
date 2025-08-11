@@ -60,7 +60,7 @@ export async function processChat(prompt: string, userId: string, config: Config
       }
 
       // Log request (optional)
-      // logger.info('OpenAI request payload (Responses):', JSON.stringify(payload, null, 2));
+      logger.info('OpenAI request payload (Responses):', JSON.stringify(payload, null, 2));
       resp = await openai.responses.create(payload);
       // Extract text robustly
       respText =
