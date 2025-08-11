@@ -15,6 +15,7 @@ export interface Config {
   supabaseAnonKey: string;
   supabaseProjectRef: string;
   systemPrompt: string;
+  model: string;
 }
 
 let config: Config =
@@ -29,7 +30,8 @@ let config: Config =
   supabaseUrl: '',
   supabaseAnonKey: '',
   supabaseProjectRef: '',
-  systemPrompt: 'You are a helpful assistant.'
+  systemPrompt: 'You are a helpful assistant.',
+  model: 'gpt-3.5-turbo'
 };
 
 export async function initializeConfig(): Promise<Config> {
@@ -53,6 +55,7 @@ export async function initializeConfig(): Promise<Config> {
     config.topP = parseFloat(process.env.TOP_P || '1.0');
     config.presencePenalty = parseFloat(process.env.PRESENCE_PENALTY || '0.0');
     config.frequencyPenalty = parseFloat(process.env.FREQUENCY_PENALTY || '0.0');
+    config.model = process.env.MODEL || 'gpt-3.5-turbo';
     config.supabaseUrl = supabaseEnv.DATABASE_URL || '';
     config.supabaseAnonKey = supabaseEnv.SUPABASE_ANON_KEY || '';
     config.supabaseProjectRef = supabaseEnv.SUPABASE_PROJECT_REF || '';

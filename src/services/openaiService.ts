@@ -18,7 +18,7 @@ export async function processChat(prompt: string, userId: string, config: Config
     history.push({ role: 'user', content: prompt });
 
     const requestPayload: ChatCompletionCreateParams = {
-      model: 'gpt-3.5-turbo',
+      model: config.model,
       messages: history,
       temperature: config.llmTemperature,
       max_tokens: config.maxTokens,
