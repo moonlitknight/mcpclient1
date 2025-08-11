@@ -1,17 +1,14 @@
-import OpenAI from 'openai';
 import { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import { Config } from '../config';
 import { logger } from '../logger';
 import { getHistory, updateHistory } from './cacheService';
+import { getOpenAIClient } from './openaiClient';
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
 export async function processChat(prompt: string, userId: string, config: Config): Promise<string> {
   try {
-    const openai = new OpenAI({
-      apiKey: config.openaiKey
-    });
-
+    const openai = getOpenAIClient();
 
     const history = getHistory(userId);
     if (history.length === 0) {
@@ -66,13 +63,12 @@ export async function processChat(prompt: string, userId: string, config: Config
       // logger.info('OpenAI request payload (Responses):', JSON.stringify(payload, null, 2));
       resp = await openai.responses.create(payload);
       // Extract text robustly
-      const text =
+      respText =
         (resp as any).output_text ??
         // Fallback: flatten output blocks if output_text isn’t present
         ((resp as any).output?.map((blk: any) =>
           blk?.content?.map((c: any) => c?.text ?? "").join("")
         ).join("") ?? "");
-
     }
 
 
@@ -80,7 +76,7 @@ export async function processChat(prompt: string, userId: string, config: Config
 
     const assistantResponse = respText;
     if (assistantResponse) {
-      // history.push(assistantResponse);  TODO fix this
+      history.push({ role: 'assistant', content: assistantResponse });
       updateHistory(userId, history);
       return respText || '';
     }

@@ -13,3 +13,7 @@ export function updateHistory(userId: string, history: ChatCompletionMessagePara
 export function clearHistory(userId: string) {
   chatHistoryCache.delete(userId);
 }
+
+export function clearAllHistory() {
+  chatHistoryCache.clear();
+}
