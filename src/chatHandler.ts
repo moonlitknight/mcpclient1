@@ -32,8 +32,15 @@ export async function handleChatRequest(req: Request): Promise<{ status: number,
       userId = supabase_jwt;
     }
 
-    const config = getConfig();
-    const openAiResponse = await processChat(text, userId, config);
+    const { temperature } = req.body as ChatRequest;
+    const defaultConfig = getConfig();
+    const requestConfig = { ...defaultConfig };
+
+    if (temperature !== undefined) {
+      requestConfig.llmTemperature = temperature;
+    }
+
+    const openAiResponse = await processChat(text, userId, requestConfig);
 
     const response: ChatResponse = {
       response: openAiResponse,

@@ -81,5 +81,21 @@ describe('Server', () => {
 
       expect(res.status).toBe(500);
     });
+
+    it('should use the temperature from the request body', async () => {
+      mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(true);
+      mockedOpenaiService.processChat.mockResolvedValue('Test response');
+      mockedJwtDecode.mockReturnValue({ email: 'test@example.com' });
+
+      const overrideTemperature = 0.99;
+      const res = await request(app)
+        .post('/chat')
+        .send({ text: 'Hello', supabase_jwt: 'valid.jwt.token', temperature: overrideTemperature });
+
+      expect(res.status).toBe(200);
+      expect(res.body.response).toBe('Test response');
+      const expectedConfig = { ...config, llmTemperature: overrideTemperature };
+      expect(mockedOpenaiService.processChat).toHaveBeenCalledWith('Hello', 'test@example.com', expectedConfig);
+    });
   });
 });

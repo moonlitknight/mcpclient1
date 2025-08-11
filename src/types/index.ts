@@ -1,6 +1,7 @@
 export interface ChatRequest {
   text: string;
   supabase_jwt: string;
+  temperature?: number;
 }
 
 export interface ChatResponse {
