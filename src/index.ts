@@ -12,7 +12,7 @@ async function main() {
   try {
     logger.info('Sending test query to OpenAI...');
     const testQuery = "What is the capital of France?";
-    const response = await processChat(testQuery, config);
+    const response = await processChat(testQuery, 'initialization-user', config);
     logger.info(`Test query response: ${response}`);
   } catch (error) {
     logger.error('Failed to send test query to OpenAI', error instanceof Error ? error : new Error(String(error)));
