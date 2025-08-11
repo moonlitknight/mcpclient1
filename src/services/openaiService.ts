@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 import { Config } from '../config';
 import { logger } from '../logger';
 
@@ -8,7 +9,7 @@ export async function processChat(prompt: string, config: Config): Promise<strin
       apiKey: config.openaiKey
     });
 
-    const completion = await openai.chat.completions.create({
+    const requestPayload: ChatCompletionCreateParams = {
       model: 'gpt-3.5-turbo',
       messages: [
         { role: 'system', content: 'You are a helpful assistant.' },
@@ -18,8 +19,15 @@ export async function processChat(prompt: string, config: Config): Promise<strin
       max_tokens: config.maxTokens,
       top_p: config.topP,
       presence_penalty: config.presencePenalty,
-      frequency_penalty: config.frequencyPenalty
-    });
+      frequency_penalty: config.frequencyPenalty,
+      stream: false
+    };
+
+    logger.info('OpenAI request payload:', JSON.stringify(requestPayload, null, 2));
+
+    const completion = await openai.chat.completions.create(requestPayload);
+
+    logger.info('OpenAI response payload:', JSON.stringify(completion, null, 2));
 
     return completion.choices[0]?.message?.content || '';
   } catch (error) {
