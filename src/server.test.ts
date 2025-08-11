@@ -72,5 +72,16 @@ describe('Server', () => {
 
         expect(res.status).toBe(500);
       });
+
+    it('should bypass JWT validation for "test" jwt', async () => {
+      mockedOpenaiService.processChat.mockResolvedValue('Test response');
+
+      const res = await request(app)
+        .post('/chat')
+        .send({ text: 'Hello', supabase_jwt: 'test' });
+
+      expect(res.status).toBe(200);
+      expect(mockedSupabaseService.validateSupabaseJWT).not.toHaveBeenCalled();
+    });
   });
 });
