@@ -14,6 +14,7 @@ export interface Config {
   supabaseUrl: string;
   supabaseAnonKey: string;
   supabaseProjectRef: string;
+  systemPrompt: string;
 }
 
 let config: Config =
@@ -27,7 +28,8 @@ let config: Config =
   frequencyPenalty: 0.0,
   supabaseUrl: '',
   supabaseAnonKey: '',
-  supabaseProjectRef: ''
+  supabaseProjectRef: '',
+  systemPrompt: 'You are a helpful assistant.'
 };
 
 export async function initializeConfig(): Promise<Config> {
@@ -55,6 +57,11 @@ export async function initializeConfig(): Promise<Config> {
     config.supabaseAnonKey = supabaseEnv.SUPABASE_ANON_KEY || '';
     config.supabaseProjectRef = supabaseEnv.SUPABASE_PROJECT_REF || '';
 
+    // Load system prompt
+    const systemPromptPath = path.join(process.cwd(), '.system_prompt');
+    if (fs.existsSync(systemPromptPath)) {
+      config.systemPrompt = fs.readFileSync(systemPromptPath, 'utf-8');
+    }
 
     // Validate required config
     if (!config.openaiKey) {

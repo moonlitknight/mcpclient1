@@ -12,7 +12,7 @@ export async function processChat(prompt: string, userId: string, config: Config
 
     const history = getHistory(userId);
     if (history.length === 0) {
-      history.push({ role: 'system', content: 'You are a helpful assistant.' });
+      history.push({ role: 'system', content: config.systemPrompt });
     }
 
     history.push({ role: 'user', content: prompt });
