@@ -1,9 +1,14 @@
 import express, { Request, Response } from 'express';
+import { jwtDecode } from 'jwt-decode';
 import { processChat } from './services/openaiService';
 import { validateSupabaseJWT } from './services/supabaseService';
 import { logger } from './logger';
 import { ChatRequest, ChatResponse } from './types';
 import { getConfig } from './config';
+
+interface DecodedToken {
+  email: string;
+}
 
 export async function handleChatRequest(req: Request): Promise<{ status: number, body: any }> {
   try {
@@ -16,7 +21,11 @@ export async function handleChatRequest(req: Request): Promise<{ status: number,
       };
     }
 
-    if (supabase_jwt !== 'test') {
+    let userId: string;
+
+    if (supabase_jwt === 'test') {
+      userId = 'test';
+    } else {
       const isJwtValid = await validateSupabaseJWT(supabase_jwt);
       if (!isJwtValid) {
         return {
@@ -24,10 +33,12 @@ export async function handleChatRequest(req: Request): Promise<{ status: number,
           body: { error: 'Invalid Supabase JWT' }
         };
       }
+      const decodedToken = jwtDecode<DecodedToken>(supabase_jwt);
+      userId = decodedToken.email;
     }
 
     const config = getConfig();
-    const openAiResponse = await processChat(text, config);
+    const openAiResponse = await processChat(text, userId, config);
 
     const response: ChatResponse = {
       response: openAiResponse,

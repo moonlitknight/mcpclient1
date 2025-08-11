@@ -3,13 +3,16 @@ import { createApp } from './server';
 import { initializeConfig, Config } from './config';
 import * as openaiService from './services/openaiService';
 import * as supabaseService from './services/supabaseService';
+import { jwtDecode } from 'jwt-decode';
 
 process.env.OPENAI_KEY = 'dummy-key';
 jest.mock('./services/openaiService');
 jest.mock('./services/supabaseService');
+jest.mock('jwt-decode');
 
 const mockedOpenaiService = openaiService as jest.Mocked<typeof openaiService>;
 const mockedSupabaseService = supabaseService as jest.Mocked<typeof supabaseService>;
+const mockedJwtDecode = jwtDecode as jest.Mock;
 
 describe('Server', () => {
   let app: any;
@@ -35,6 +38,7 @@ describe('Server', () => {
     it('should return 200 OK for a valid request', async () => {
       mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(true);
       mockedOpenaiService.processChat.mockResolvedValue('Test response');
+      mockedJwtDecode.mockReturnValue({ email: 'test@example.com' });
 
       const res = await request(app)
         .post('/chat')
@@ -42,7 +46,7 @@ describe('Server', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.response).toBe('Test response');
-      expect(mockedOpenaiService.processChat).toHaveBeenCalledWith('Hello', config);
+      expect(mockedOpenaiService.processChat).toHaveBeenCalledWith('Hello', 'test@example.com', config);
     });
 
     it('should return 400 for a request with missing text', async () => {
@@ -64,15 +68,16 @@ describe('Server', () => {
     });
 
     it('should return 500 if openaiService fails', async () => {
-        mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(true);
-        mockedOpenaiService.processChat.mockRejectedValue(new Error('OpenAI error'));
+      mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(true);
+      mockedOpenaiService.processChat.mockRejectedValue(new Error('OpenAI error'));
+      mockedJwtDecode.mockReturnValue({ email: 'test@example.com' });
 
-        const res = await request(app)
-          .post('/chat')
-          .send({ text: 'Hello', supabase_jwt: 'valid.jwt.token' });
+      const res = await request(app)
+        .post('/chat')
+        .send({ text: 'Hello', supabase_jwt: 'valid.jwt.token' });
 
-        expect(res.status).toBe(500);
-      });
+      expect(res.status).toBe(500);
+    });
 
     it('should bypass JWT validation for "test" jwt', async () => {
       mockedOpenaiService.processChat.mockResolvedValue('Test response');
@@ -83,6 +88,7 @@ describe('Server', () => {
 
       expect(res.status).toBe(200);
       expect(mockedSupabaseService.validateSupabaseJWT).not.toHaveBeenCalled();
+      expect(mockedOpenaiService.processChat).toHaveBeenCalledWith('Hello', 'test', config);
     });
   });
 });
