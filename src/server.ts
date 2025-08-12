@@ -14,13 +14,9 @@ export function createApp(config: Config) {
   });
 
   // Main chat endpoint
-  app.post('/chat', express.json(), async (req, res) => {
-    // fix the line below to use the correct type for the request body
+  app.post('/chat', express.json(), async (req: Request, res: Response) => {
     const result = await handleChatRequest(req);
-    res.status(result.status);
-    res.json(result.body);
-    res.end();
-    return result.body;
+    res.status(result.status).json(result.body);
   });
 
 
