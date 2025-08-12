@@ -46,19 +46,26 @@ export async function processChat(
 
     if (stream && res) {
       const openAiStream = await openai.responses.create(payload, { stream: true });
-      
+
       let fullResponse = '';
       // Convert the stream to async iterable explicitly
       const asyncIterable = openAiStream as unknown as AsyncIterable<{
         choices?: Array<{ delta?: { content?: string } }>
       }>;
-      
+
       for await (const chunk of asyncIterable) {
+        console.log('See stderr in /tmp/stderr for detailed response logging'); // Debug raw chunk
+        process.stderr.write('Raw stream chunk:' + JSON.stringify(chunk, null, 2)); // Debug raw chunk
         const content = chunk.choices?.[0]?.delta?.content || '';
+        //@ts-ignore
+        if (chunk['delta']) process.stdout.write(chunk['delta']);
         if (content) {
-          logger.info('Interim response:', content);
+          process.stderr.write('Interim content:' + content); // Debug content
           res.write(JSON.stringify({ response: content }));
+          if (content) console.log(content);
           fullResponse += content;
+        } else {
+          process.stderr.write('Empty content in chunk'); // Debug empty chunks
         }
       }
       history.push({ role: 'assistant', content: fullResponse });
