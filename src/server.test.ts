@@ -52,21 +52,32 @@ describe('Server', () => {
       ];
       const mockCreate = jest.fn().mockResolvedValue(mockStream(chunks));
       mockedGetOpenAIClient.mockReturnValue({
-        responses: {
-          create: mockCreate,
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
         },
       } as any);
       mockedJwtDecode.mockReturnValue({ email: 'test@example.com' });
 
-      const res = await request(app)
+      const req = request(app)
         .post('/chat')
         .send({ text: 'Hello', supabase_jwt: 'valid.jwt.token' });
+
+      const res = await new Promise<any>((resolve) => {
+        request(app)
+          .post('/chat')
+          .send({ text: 'Hello', supabase_jwt: 'valid.jwt.token' })
+          .end((err, res) => {
+            resolve(res);
+          });
+      });
 
       expect(res.status).toBe(200);
       expect(res.text).toBe('{"response":"Hello "}{"response":"World"}');
       expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
         stream: true,
-        input: expect.arrayContaining([
+        messages: expect.arrayContaining([
           expect.objectContaining({ role: 'user', content: 'Hello' })
         ])
       }));
@@ -84,8 +95,10 @@ describe('Server', () => {
       mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(true);
       const mockCreate = jest.fn().mockRejectedValue(new Error('OpenAI error'));
       mockedGetOpenAIClient.mockReturnValue({
-        responses: {
-          create: mockCreate,
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
         },
       } as any);
       mockedJwtDecode.mockReturnValue({ email: 'test@example.com' });

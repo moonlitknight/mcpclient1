@@ -4,7 +4,7 @@ import { logger } from '../logger';
 import { getHistory, updateHistory } from './cacheService';
 import { getOpenAIClient } from './openaiClient';
 import { Response } from 'express';
-import { Stream } from 'openai/streaming';
+import { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -19,27 +19,20 @@ export async function processChat(prompt: string, userId: string, config: Config
 
     history.push({ role: 'user', content: prompt });
 
-    const payload: any = {
+    const requestPayload: ChatCompletionCreateParams = {
       model: config.model,
-      input: history,
-      max_output_tokens: config.maxTokens ?? 800,
+      messages: history,
+      temperature: config.llmTemperature,
+      max_tokens: config.maxTokens,
+      top_p: config.topP,
+      presence_penalty: config.presencePenalty,
+      frequency_penalty: config.frequencyPenalty,
       stream: true,
     };
 
-    if (isReasoningModel(config.model) && config.reasoningEffort) {
-      payload.reasoning = { effort: config.reasoningEffort };
-    }
+    logger.info('OpenAI request payload:', JSON.stringify(requestPayload, null, 2));
 
-    if (supportsSamplingKnobs(config.model)) {
-      if (typeof config.llmTemperature === "number") payload.temperature = config.llmTemperature;
-      if (typeof config.topP === "number") payload.top_p = config.topP;
-      if (typeof config.presencePenalty === "number") payload.presence_penalty = config.presencePenalty;
-      if (typeof config.frequencyPenalty === "number") payload.frequency_penalty = config.frequencyPenalty;
-    }
-
-    logger.info('OpenAI request payload (Responses):', JSON.stringify(payload, null, 2));
-
-    const stream = await openai.responses.create(payload as any);
+    const stream = await openai.chat.completions.create(requestPayload);
 
     let assistantResponse = '';
     res.setHeader('Content-Type', 'application/json');
