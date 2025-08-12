@@ -1,12 +1,14 @@
-import { ChatCompletionCreateParams } from 'openai/resources/chat/completions';
+import { OpenAI } from 'openai';
 import { Config } from '../config';
 import { logger } from '../logger';
 import { getHistory, updateHistory } from './cacheService';
 import { getOpenAIClient } from './openaiClient';
+import { Response } from 'express';
+import { Stream } from 'openai/streaming';
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
-export async function processChat(prompt: string, userId: string, config: Config): Promise<string> {
+export async function processChat(prompt: string, userId: string, config: Config, res: Response): Promise<void> {
   try {
     const openai = getOpenAIClient();
 
@@ -17,74 +19,55 @@ export async function processChat(prompt: string, userId: string, config: Config
 
     history.push({ role: 'user', content: prompt });
 
-    // const requestPayload: ChatCompletionCreateParams = {
-    //   model: config.model,
-    //   messages: history,
-    //   temperature: config.llmTemperature,
-    //   max_completion_tokens: config.maxTokens,
-    //   top_p: config.topP,
-    //   presence_penalty: config.presencePenalty,
-    //   frequency_penalty: config.frequencyPenalty,
-    //   stream: false
-    // };
-    //
-    // logger.info('OpenAI request payload:', JSON.stringify(requestPayload, null, 2));
-    //
-    // const completion = await openai.chat.completions.create(requestPayload);
+    const payload: any = {
+      model: config.model,
+      input: history,
+      max_output_tokens: config.maxTokens ?? 800,
+      stream: true,
+    };
 
-    const useResponsesAPI = true; // set to false to keep Chat Completions
-
-    let resp = {};
-    let respText = '';
-    if (useResponsesAPI) {
-      // Build the Responses payload
-      // The Responses API accepts `input` as an array of chat-style messages.
-      // Keep system + prior messages byte-identical across calls to maximize caching.
-      const payload: any = {
-        model: config.model,
-        input: history, // [{role, content}, ...]
-        max_output_tokens: config.maxTokens ?? 800
-      };
-
-      // Reasoning controls (only for reasoning models)
-      if (isReasoningModel(config.model) && config.reasoningEffort) {
-        payload.reasoning = { effort: config.reasoningEffort };
-      }
-
-      // Old sampling knobs (only if supported by the model)
-      if (supportsSamplingKnobs(config.model)) {
-        if (typeof config.llmTemperature === "number") payload.temperature = config.llmTemperature;
-        if (typeof config.topP === "number") payload.top_p = config.topP;
-        if (typeof config.presencePenalty === "number") payload.presence_penalty = config.presencePenalty;
-        if (typeof config.frequencyPenalty === "number") payload.frequency_penalty = config.frequencyPenalty;
-      }
-
-      // Log request (optional)
-      logger.info('OpenAI request payload (Responses):', JSON.stringify(payload, null, 2));
-      resp = await openai.responses.create(payload);
-      // Extract text robustly
-      respText =
-        (resp as any).output_text ??
-        // Fallback: flatten output blocks if output_text isn’t present
-        ((resp as any).output?.map((blk: any) =>
-          blk?.content?.map((c: any) => c?.text ?? "").join("")
-        ).join("") ?? "");
+    if (isReasoningModel(config.model) && config.reasoningEffort) {
+      payload.reasoning = { effort: config.reasoningEffort };
     }
 
+    if (supportsSamplingKnobs(config.model)) {
+      if (typeof config.llmTemperature === "number") payload.temperature = config.llmTemperature;
+      if (typeof config.topP === "number") payload.top_p = config.topP;
+      if (typeof config.presencePenalty === "number") payload.presence_penalty = config.presencePenalty;
+      if (typeof config.frequencyPenalty === "number") payload.frequency_penalty = config.frequencyPenalty;
+    }
 
-    logger.info('OpenAI response payload:', JSON.stringify(resp, null, 2));
+    logger.info('OpenAI request payload (Responses):', JSON.stringify(payload, null, 2));
 
-    const assistantResponse = respText;
+    const stream = await openai.responses.create(payload as any);
+
+    let assistantResponse = '';
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Transfer-Encoding', 'chunked');
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        assistantResponse += content;
+        console.log("Chunk received:", content);
+        res.write(JSON.stringify({ response: content }));
+      }
+    }
+
     if (assistantResponse) {
       history.push({ role: 'assistant', content: assistantResponse });
       updateHistory(userId, history);
-      return respText || '';
     }
 
-    return '';
+    res.end();
+
   } catch (error) {
     logger.error('OpenAI request failed', error instanceof Error ? error : new Error(String(error)));
-    throw new Error('Failed to process chat request');
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to process chat request' });
+    } else {
+      res.end();
+    }
   }
 }
 

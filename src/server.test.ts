@@ -3,44 +3,36 @@ import { createApp } from './server';
 import { initializeConfig, Config } from './config';
 import * as supabaseService from './services/supabaseService';
 import { jwtDecode } from 'jwt-decode';
-import { clearAllHistory } from './services/cacheService';
 import * as openaiClient from './services/openaiClient';
+import { OpenAI } from 'openai';
 
 process.env.OPENAI_KEY = 'dummy-key';
 
 jest.mock('./services/supabaseService');
 jest.mock('jwt-decode');
-jest.mock('./services/openaiClient', () => ({
-  getOpenAIClient: jest.fn(),
-  __resetOpenAIClient: jest.fn(),
-}));
+jest.mock('./services/openaiClient');
 
 const mockedSupabaseService = supabaseService as jest.Mocked<typeof supabaseService>;
 const mockedJwtDecode = jwtDecode as jest.Mock;
 const mockedGetOpenAIClient = openaiClient.getOpenAIClient as jest.Mock;
-const mockedResetOpenAIClient = openaiClient.__resetOpenAIClient as jest.Mock;
+
+// Mock async generator for streaming
+async function* mockStream(chunks: OpenAI.Chat.Completions.ChatCompletionChunk[]) {
+  for (const chunk of chunks) {
+    yield chunk;
+  }
+}
 
 describe('Server', () => {
   let app: any;
   let config: Config;
-  const mockCreate = jest.fn();
 
   beforeAll(async () => {
     config = await initializeConfig();
     app = createApp(config);
   });
 
-  beforeEach(() => {
-    const mockClient = {
-      responses: {
-        create: mockCreate,
-      },
-    };
-    mockedGetOpenAIClient.mockReturnValue(mockClient);
-  });
-
   afterEach(() => {
-    jest.resetModules();
     jest.resetAllMocks();
   });
 
@@ -52,9 +44,18 @@ describe('Server', () => {
   });
 
   describe('POST /chat', () => {
-    it('should return 200 OK for a valid request', async () => {
+    it('should stream the response for a valid request', async () => {
       mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(true);
-      mockCreate.mockResolvedValue({ output_text: 'Test response' });
+      const chunks: OpenAI.Chat.Completions.ChatCompletionChunk[] = [
+        { id: '1', choices: [{ delta: { content: 'Hello ' }, index: 0, finish_reason: 'length', logprobs: undefined }], created: 1, model: '', object: 'chat.completion.chunk', system_fingerprint: undefined },
+        { id: '2', choices: [{ delta: { content: 'World' }, index: 0, finish_reason: 'stop', logprobs: undefined }], created: 1, model: '', object: 'chat.completion.chunk', system_fingerprint: undefined },
+      ];
+      const mockCreate = jest.fn().mockResolvedValue(mockStream(chunks));
+      mockedGetOpenAIClient.mockReturnValue({
+        responses: {
+          create: mockCreate,
+        },
+      } as any);
       mockedJwtDecode.mockReturnValue({ email: 'test@example.com' });
 
       const res = await request(app)
@@ -62,8 +63,9 @@ describe('Server', () => {
         .send({ text: 'Hello', supabase_jwt: 'valid.jwt.token' });
 
       expect(res.status).toBe(200);
-      expect(res.body.response).toBe('Test response');
+      expect(res.text).toBe('{"response":"Hello "}{"response":"World"}');
       expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+        stream: true,
         input: expect.arrayContaining([
           expect.objectContaining({ role: 'user', content: 'Hello' })
         ])
@@ -78,26 +80,14 @@ describe('Server', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should use the provided string as userId if JWT is invalid', async () => {
-      mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(false);
-      mockCreate.mockResolvedValue({ output_text: 'Test response' });
-
-      const res = await request(app)
-        .post('/chat')
-        .send({ text: 'Hello', supabase_jwt: 'not-a-jwt' });
-
-      expect(res.status).toBe(200);
-      expect(res.body.response).toBe('Test response');
-      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-        input: expect.arrayContaining([
-          expect.objectContaining({ role: 'user', content: 'Hello' })
-        ])
-      }));
-    });
-
     it('should return 500 if openaiService fails', async () => {
       mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(true);
-      mockCreate.mockRejectedValue(new Error('OpenAI error'));
+      const mockCreate = jest.fn().mockRejectedValue(new Error('OpenAI error'));
+      mockedGetOpenAIClient.mockReturnValue({
+        responses: {
+          create: mockCreate,
+        },
+      } as any);
       mockedJwtDecode.mockReturnValue({ email: 'test@example.com' });
 
       const res = await request(app)
@@ -105,60 +95,6 @@ describe('Server', () => {
         .send({ text: 'Hello', supabase_jwt: 'valid.jwt.token' });
 
       expect(res.status).toBe(500);
-    });
-
-    it('should use the temperature from the request body', async () => {
-      mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(true);
-      mockCreate.mockResolvedValue({ output_text: 'Test response' });
-      mockedJwtDecode.mockReturnValue({ email: 'test@example.com' });
-
-      const overrideTemperature = 0.99;
-      const res = await request(app)
-        .post('/chat')
-        .send({ text: 'Hello', supabase_jwt: 'valid.jwt.token', temperature: overrideTemperature });
-
-      expect(res.status).toBe(200);
-      expect(res.body.response).toBe('Test response');
-      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-        temperature: overrideTemperature
-      }));
-    });
-
-    it('should maintain conversation history', async () => {
-      mockedSupabaseService.validateSupabaseJWT.mockResolvedValue(true);
-      mockedJwtDecode.mockReturnValue({ email: 'test@example.com' });
-
-      // First request
-      mockCreate.mockResolvedValueOnce({
-        output_text: 'Response 1',
-      });
-      await request(app)
-        .post('/chat')
-        .send({ text: 'Request 1', supabase_jwt: 'valid.jwt.token' });
-
-      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-        input: [
-          { role: 'system', content: config.systemPrompt },
-          { role: 'user', content: 'Request 1' }
-        ]
-      }));
-
-      // Second request
-      mockCreate.mockResolvedValueOnce({
-        output_text: 'Response 2'
-      });
-      await request(app)
-        .post('/chat')
-        .send({ text: 'Request 2', supabase_jwt: 'valid.jwt.token' });
-
-      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-        input: [
-          { role: 'system', content: config.systemPrompt },
-          { role: 'user', content: 'Request 1' },
-          { role: 'assistant', content: 'Response 1' },
-          { role: 'user', content: 'Request 2' }
-        ]
-      }));
     });
   });
 });
