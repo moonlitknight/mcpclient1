@@ -30,11 +30,12 @@ export async function processChat(prompt: string, userId: string, config: Config
     history.push({ role: 'user', content: prompt });
 
     // Construct the request payload for the OpenAI API
+    // max_tokens: config.maxTokens,
     const requestPayload: ChatCompletionCreateParams = {
       model: config.model,
       messages: history,
       temperature: config.llmTemperature,
-      max_tokens: config.maxTokens,
+      max_completion_tokens: config.maxTokens,
       top_p: config.topP,
       presence_penalty: config.presencePenalty,
       frequency_penalty: config.frequencyPenalty,
