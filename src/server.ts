@@ -15,8 +15,7 @@ export function createApp(config: Config) {
 
   // Main chat endpoint
   app.post('/chat', express.json(), async (req: Request, res: Response) => {
-    const result = await handleChatRequest(req);
-    res.status(result.status).json(result.body);
+    await handleChatRequest(req, res);
   });
 
 
