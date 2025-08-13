@@ -12,7 +12,7 @@ interface DecodedToken {
 
 export async function handleChatRequest(req: Request, res: Response): Promise<void> {
   try {
-    const { text, supabase_jwt, stream } = req.body as ChatRequest;
+    const { text, supabase_jwt, stream, tools } = req.body as ChatRequest;
 
     if (!text || !supabase_jwt) {
       res.status(400).json({ error: 'Missing required fields: text and supabase_jwt are required' });
@@ -40,9 +40,9 @@ export async function handleChatRequest(req: Request, res: Response): Promise<vo
 
     if (stream) {
         res.setHeader('Content-Type', 'application/json');
-        await processChat(text, userId, requestConfig, stream, res);
+        await processChat(text, userId, requestConfig, stream, res, tools);
     } else {
-        const openAiResponse = await processChat(text, userId, requestConfig, stream, res);
+        const openAiResponse = await processChat(text, userId, requestConfig, stream, res, tools);
         const response: ChatResponse = {
             response: openAiResponse as string,
             metadata: {

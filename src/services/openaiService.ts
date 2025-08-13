@@ -1,8 +1,9 @@
+import { OpenAI } from 'openai';
 import { Response } from 'express';
 import { Readable } from 'stream';
 import { Config } from '../config';
 import { logger } from '../logger';
-import { getHistory, updateHistory } from './cacheService';
+import { getHistory, updateHistory, getPreviousResponseId, updatePreviousResponseId } from './cacheService';
 import { getOpenAIClient } from './openaiClient';
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
@@ -12,7 +13,8 @@ export async function processChat(
   userId: string,
   config: Config,
   stream?: boolean,
-  res?: Response
+  res?: Response,
+  tools?: OpenAI.Chat.Completions.ChatCompletionTool[]
 ): Promise<string | void> {
   try {
     const openai = getOpenAIClient();
@@ -26,10 +28,19 @@ export async function processChat(
 
     const payload: any = {
       model: config.model,
-      input: history,
+      input: [{ role: 'user', content: prompt }],
       max_output_tokens: config.maxTokens ?? 800,
       stream: stream,
     };
+
+    const previousResponseId = getPreviousResponseId(userId);
+    if (previousResponseId) {
+        payload.previous_response_id = previousResponseId;
+    }
+
+    if (tools) {
+        payload.tools = tools;
+    }
 
     if (isReasoningModel(config.model) && config.reasoningEffort) {
       payload.reasoning = { effort: config.reasoningEffort };
@@ -48,14 +59,26 @@ export async function processChat(
       const openAiStream = await openai.responses.create(payload, { stream: true });
 
       let fullResponse = '';
+      let responseId: string | undefined;
       // Convert the stream to async iterable explicitly
       const asyncIterable = openAiStream as unknown as AsyncIterable<{
-        choices?: Array<{ delta?: { content?: string } }>
+        id?: string;
+        choices?: Array<{ delta?: { content?: string, tool_calls?: any } }>
       }>;
 
       for await (const chunk of asyncIterable) {
         console.log('See stderr in /tmp/stderr for detailed response logging'); // Debug raw chunk
         process.stderr.write('Raw stream chunk:' + JSON.stringify(chunk, null, 2)); // Debug raw chunk
+
+        if (chunk.id) {
+            responseId = chunk.id;
+        }
+
+        if (chunk.choices?.[0]?.delta?.tool_calls) {
+            console.log('Tool calls requested:');
+            console.log(JSON.stringify(chunk.choices[0].delta.tool_calls, null, 2));
+        }
+
         const content = chunk.choices?.[0]?.delta?.content || '';
         //@ts-ignore
         if (chunk['delta']) process.stdout.write(chunk['delta']);
@@ -67,6 +90,9 @@ export async function processChat(
         } else {
           process.stderr.write('Empty content in chunk'); // Debug empty chunks
         }
+      }
+      if (responseId) {
+        updatePreviousResponseId(userId, responseId);
       }
       history.push({ role: 'assistant', content: fullResponse });
       updateHistory(userId, history);
@@ -80,6 +106,15 @@ export async function processChat(
         ).join("") ?? "");
 
       logger.info('OpenAI response payload:', JSON.stringify(resp, null, 2));
+
+      if ((resp as any).tool_calls) {
+        console.log('Tool calls requested:');
+        console.log(JSON.stringify((resp as any).tool_calls, null, 2));
+      }
+
+      if (resp.id) {
+        updatePreviousResponseId(userId, resp.id);
+      }
 
       if (respText) {
         history.push({ role: 'assistant', content: respText });
