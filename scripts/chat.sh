@@ -14,6 +14,33 @@ temperature="1"
 stream="false"
 text=""
 
+
+TOOL_JSON=$(cat <<'EOF'
+{
+    "type": "function",
+    "name": "get_weather",
+    "description": "Retrieves current weather for the given location.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "location": {
+                "type": "string",
+                "description": "City and country e.g. Bogotá, Colombia"
+            },
+            "units": {
+                "type": "string",
+                "enum": ["celsius", "fahrenheit"],
+                "description": "Units the temperature will be returned in."
+            }
+        },
+        "required": ["location", "units"],
+        "additionalProperties": false
+    },
+    "strict": true
+}
+EOF
+)
+
 # Process property arguments
 while [ $# -gt 0 ] && [[ "$1" == *=* ]]; do
   key="${1%%=*}"
@@ -42,5 +69,13 @@ text="$*"
 # now construct the curl command
 set -x
 curl -X POST -H 'Content-Type: application/json' \
-  -d "{\"text\":\"$text\", \"supabase_jwt\":\"$supabase_jwt\", \"temperature\":$temperature, \"stream\":$stream}" \
+  -d @- <<EOF \
   -v localhost:3001/chat
+{
+  "text": "$text",
+  "supabase_jwt": "$supabase_jwt",
+  "temperature": $temperature,
+  "stream": $stream,
+  "tools": [$TOOL_JSON]
+}
+EOF
