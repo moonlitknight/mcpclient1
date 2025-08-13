@@ -28,7 +28,7 @@ export async function processChat(
 
     const payload: any = {
       model: config.model,
-      input: [{ role: 'user', content: prompt }],
+      input: [],
       max_output_tokens: config.maxTokens ?? 800,
       stream: stream,
     };
@@ -36,6 +36,12 @@ export async function processChat(
     const previousResponseId = getPreviousResponseId(userId);
     if (previousResponseId) {
         payload.previous_response_id = previousResponseId;
+        payload.input = [{ role: 'user', content: prompt }];
+    } else {
+        payload.input = [
+            { role: 'system', content: config.systemPrompt },
+            { role: 'user', content: prompt }
+        ];
     }
 
     if (tools) {
