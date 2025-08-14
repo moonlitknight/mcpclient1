@@ -16,28 +16,38 @@ text=""
 
 
 TOOL_JSON=$(cat <<'EOF'
+[
+
 {
     "type": "function",
-    "name": "get_weather",
-    "description": "Retrieves current weather for the given location.",
+    "name": "post_journal_entry",
+    "description": "Posts a journal entry to the account system nominal ledger.",
     "parameters": {
         "type": "object",
         "properties": {
-            "location": {
+            "debit_account_number": {
                 "type": "string",
-                "description": "City and country e.g. Bogotá, Colombia"
+                "description": "The nnn or nnn.n format nominal account number to debit."
             },
-            "units": {
+            "credit_account_number": {
                 "type": "string",
-                "enum": ["celsius", "fahrenheit"],
-                "description": "Units the temperature will be returned in."
+                "description": "The nnn or nnn.n format nominal account number to credit."
+            },
+            "effective_date": {
+                "type": "string",
+                "description": "The date the journal entry is effective."
+            },
+            "amount": {
+                "type": "number",
+                "description": "The amount in euros to debit or credit."
             }
         },
-        "required": ["location", "units"],
+        "required": ["debit_account_number", "credit_account_number", "effective_date", "amount"],
         "additionalProperties": false
     },
     "strict": true
 }
+]
 EOF
 )
 
@@ -76,6 +86,6 @@ curl -X POST -H 'Content-Type: application/json' \
   "supabase_jwt": "$supabase_jwt",
   "temperature": $temperature,
   "stream": $stream,
-  "tools": [$TOOL_JSON]
+  "tools": $TOOL_JSON
 }
 EOF
