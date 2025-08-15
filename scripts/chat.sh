@@ -77,10 +77,11 @@ done
 text="$*"
 
 # now construct the curl command
-set -x
-curl -X POST -H 'Content-Type: application/json' \
+# set -x
+
+response=$(curl -s -X POST -H 'Content-Type: application/json' \
   -d @- <<EOF \
-  -v localhost:3001/chat
+  localhost:3001/chat
 {
   "text": "$text",
   "supabase_jwt": "$supabase_jwt",
@@ -89,3 +90,14 @@ curl -X POST -H 'Content-Type: application/json' \
   "tools": $TOOL_JSON
 }
 EOF
+)
+
+# Print raw response for debugging
+echo "Raw response:"
+echo "$response"
+
+# Extract and print response content if present
+if [[ "$response" == *'"response":'* ]]; then
+  echo -e "\nResponse content:"
+  echo "$response" | jq -r '.response'
+fi
