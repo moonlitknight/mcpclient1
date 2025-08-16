@@ -1,3 +1,8 @@
+/**
+ * Module for handling OpenAI chat interactions including streaming and standard responses.
+ * @module openaiService
+ */
+
 import { OpenAI } from 'openai';
 import { Response } from 'express';
 import { Readable } from 'stream';
@@ -5,129 +10,50 @@ import { Config } from '../config';
 import { logger } from '../logger';
 import { getHistory, updateHistory, getPreviousResponseId, updatePreviousResponseId } from './cacheService';
 import { getOpenAIClient } from './openaiClient';
+import { ChatResponse, FunctionTool, ResponseOutputItem } from '../types';
+import { OutputItems } from 'openai/resources/evals/runs/output-items';
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
+/**
+ * Processes a chat request, handling both streaming and standard responses.
+ * @async
+ * @function processChat
+ * @param {string} prompt - The user's input prompt
+ * @param {string} userIdJwt - Unique identifier for the user using the Supabase JWT
+ * @param {Config} config - Configuration object
+ * @param {boolean} [stream] - Whether to use streaming response
+ * @param {Response} [res] - Express response object for streaming
+ * @param {FunctionTool[]} [tools] - Optional tools for function calling
+ * @returns {Promise<string>} - The processed response text
+ * @throws {Error} If the chat request fails
+ */
 export async function processChat(
   prompt: string,
-  userId: string,
+  userIdJwt: string,
   config: Config,
   stream?: boolean,
   res?: Response,
-  tools?: OpenAI.Chat.Completions.ChatCompletionTool[]
-): Promise<string | void> {
+  tools?: FunctionTool[],
+): Promise<ChatResponse> {
   try {
     const openai = getOpenAIClient();
+    const history = getHistory(userIdJwt);
 
-    const history = getHistory(userId);
+    // Initialize history if empty
     if (history.length === 0) {
       history.push({ role: 'system', content: config.systemPrompt });
     }
-
     history.push({ role: 'user', content: prompt });
 
-    const payload: any = {
-      model: config.model,
-      input: [],
-      max_output_tokens: config.maxTokens ?? 800,
-      stream: stream,
-    };
-
-    const previousResponseId = getPreviousResponseId(userId);
-    if (previousResponseId) {
-        payload.previous_response_id = previousResponseId;
-        payload.input = [{ role: 'user', content: prompt }];
-    } else {
-        payload.input = [
-            { role: 'system', content: config.systemPrompt },
-            { role: 'user', content: prompt }
-        ];
-    }
-
-    if (tools) {
-        payload.tools = tools;
-    }
-
-    if (isReasoningModel(config.model) && config.reasoningEffort) {
-      payload.reasoning = { effort: config.reasoningEffort };
-    }
-
-    if (supportsSamplingKnobs(config.model)) {
-      if (typeof config.llmTemperature === "number") payload.temperature = config.llmTemperature;
-      if (typeof config.topP === "number") payload.top_p = config.topP;
-      if (typeof config.presencePenalty === "number") payload.presence_penalty = config.presencePenalty;
-      if (typeof config.frequencyPenalty === "number") payload.frequency_penalty = config.frequencyPenalty;
-    }
-
+    const payload = createPayload(prompt, userIdJwt, config, stream, tools);
     logger.info('OpenAI request payload (Responses):', JSON.stringify(payload, null, 2));
 
     if (stream && res) {
-      const openAiStream = await openai.responses.create(payload, { stream: true });
-
-      let fullResponse = '';
-      let responseId: string | undefined;
-      // Convert the stream to async iterable explicitly
-      const asyncIterable = openAiStream as unknown as AsyncIterable<{
-        id?: string;
-        choices?: Array<{ delta?: { content?: string, tool_calls?: any } }>
-      }>;
-
-      for await (const chunk of asyncIterable) {
-        console.log('See stderr in /tmp/stderr for detailed response logging'); // Debug raw chunk
-        process.stderr.write('Raw stream chunk:' + JSON.stringify(chunk, null, 2)); // Debug raw chunk
-
-        if (chunk.id) {
-            responseId = chunk.id;
-        }
-
-        if (chunk.choices?.[0]?.delta?.tool_calls) {
-            console.log('Tool calls requested:');
-            console.log(JSON.stringify(chunk.choices[0].delta.tool_calls, null, 2));
-        }
-
-        const content = chunk.choices?.[0]?.delta?.content || '';
-        //@ts-ignore
-        if (chunk['delta']) process.stdout.write(chunk['delta']);
-        if (content) {
-          process.stderr.write('Interim content:' + content); // Debug content
-          res.write(JSON.stringify({ response: content }));
-          if (content) console.log(content);
-          fullResponse += content;
-        } else {
-          process.stderr.write('Empty content in chunk'); // Debug empty chunks
-        }
-      }
-      if (responseId) {
-        updatePreviousResponseId(userId, responseId);
-      }
-      history.push({ role: 'assistant', content: fullResponse });
-      updateHistory(userId, history);
-      res.end();
+      //@ts-ignore
+      return await processStreamResponse(openai, payload, userIdJwt, res);
     } else {
-      const resp = await openai.responses.create(payload);
-      const respText =
-        (resp as any).output_text ??
-        ((resp as any).output?.map((blk: any) =>
-          blk?.content?.map((c: any) => c?.text ?? "").join("")
-        ).join("") ?? "");
-
-      logger.info('OpenAI response payload:', JSON.stringify(resp, null, 2));
-
-      if ((resp as any).tool_calls) {
-        console.log('Tool calls requested:');
-        console.log(JSON.stringify((resp as any).tool_calls, null, 2));
-      }
-
-      if (resp.id) {
-        updatePreviousResponseId(userId, resp.id);
-      }
-
-      if (respText) {
-        history.push({ role: 'assistant', content: respText });
-        updateHistory(userId, history);
-        return respText;
-      }
-      return '';
+      return await processNonStreamResponse(openai, payload, userIdJwt);
     }
   } catch (error) {
     logger.error('OpenAI request failed', error instanceof Error ? error : new Error(String(error)));
@@ -138,10 +64,174 @@ export async function processChat(
   }
 }
 
+/**
+ * Creates the payload for OpenAI API requests.
+ * @function createPayload
+ * @param {string} prompt - The user's input prompt
+ * @param {string} userId - Unique identifier for the user
+ * @param {Config} config - Configuration object
+ * @param {boolean} [stream] - Whether to use streaming
+ * @param {FunctionTool[]} [tools] - Optional tools for function calling
+ * @returns {Object} The constructed payload object
+ *
+ */
+function createPayload(
+  prompt: string,
+  userId: string,
+  config: Config,
+  stream?: boolean,
+  tools?: FunctionTool[]
+): any {
+  const payload: any = {
+    model: config.model,
+    input: [],
+    max_output_tokens: config.maxTokens ?? 800,
+    stream: stream,
+  };
+
+  const previousResponseId = getPreviousResponseId(userId);
+  if (previousResponseId) {
+    payload.previous_response_id = previousResponseId;
+    payload.input = [{ role: 'user', content: prompt }];
+  } else {
+    payload.input = [
+      { role: 'system', content: config.systemPrompt },
+      { role: 'user', content: prompt }
+    ];
+  }
+
+  if (tools) {
+    payload.tools = tools;
+  }
+
+  if (isReasoningModel(config.model) && config.reasoningEffort) {
+    payload.reasoning = { effort: config.reasoningEffort };
+  }
+
+  if (supportsSamplingKnobs(config.model)) {
+    if (typeof config.llmTemperature === "number") payload.temperature = config.llmTemperature;
+    if (typeof config.topP === "number") payload.top_p = config.topP;
+    if (typeof config.presencePenalty === "number") payload.presence_penalty = config.presencePenalty;
+    if (typeof config.frequencyPenalty === "number") payload.frequency_penalty = config.frequencyPenalty;
+  }
+
+  return payload;
+}
+
+/**
+ * Processes a streaming response from OpenAI.
+ * @async
+ * @function processStreamResponse
+ * @param {OpenAI} openai - OpenAI client instance
+ * @param {Object} payload - The request payload
+ * @param {string} userId - Unique identifier for the user
+ * @param {Response} res - Express response object
+ * @returns {Promise<string>} The full response content
+ * @deprecated Only because I havent tested it recently. 
+ */
+async function processStreamResponse(
+  openai: OpenAI,
+  payload: any,
+  userId: string,
+  res: Response
+): Promise<string> {
+  console.warn('processStreamResponse is deprecated only because I havent tested it recently. It should still work.');
+  const openAiStream = await openai.responses.create(payload, { stream: true });
+  let fullResponse = '';
+  let responseId: string | undefined;
+
+  const asyncIterable = openAiStream as unknown as AsyncIterable<{
+    id?: string;
+    choices?: Array<{ delta?: { content?: string, tool_calls?: any } }>
+  }>;
+
+  for await (const chunk of asyncIterable) {
+    if (chunk.id) {
+      responseId = chunk.id;
+    }
+
+    if (chunk.choices?.[0]?.delta?.tool_calls) {
+      logger.info('Tool calls requested:', chunk.choices[0].delta.tool_calls);
+    }
+
+    const content = chunk.choices?.[0]?.delta?.content || '';
+    if (content) {
+      res.write(JSON.stringify({ response: content }));
+      fullResponse += content;
+    }
+  }
+
+  if (responseId) {
+    updatePreviousResponseId(userId, responseId);
+  }
+  updateHistory(userId, [...getHistory(userId), { role: 'assistant', content: fullResponse }]);
+  res.end();
+  return fullResponse;
+}
+
+/**
+ * Processes a standard (non-streaming) response from OpenAI.
+ * @async
+ * @function processStandardResponse
+ * @param {OpenAI} openai - OpenAI client instance
+ * @param {Object} payload - The request payload
+ * @param {string} userId - Unique identifier for the user
+ * @returns {Promise<string>} The response text
+ */
+async function processNonStreamResponse(
+  openai: OpenAI,
+  payload: any,
+  userId: string
+): Promise<ChatResponse> {
+  const openaiResponseBody = await openai.responses.create(payload);
+  const chatResponse: ChatResponse = {
+    output: [],
+    output_text: '',
+    metadata: {
+      timestamp: new Date().toISOString(),
+      status: 'success',
+    },
+  };
+  chatResponse.output = openaiResponseBody.output as ResponseOutputItem[];
+  chatResponse.output_text = openaiResponseBody.output_text || '';
+  const respText =
+    (openaiResponseBody as any).output_text ??
+    ((openaiResponseBody as any).output?.map((blk: any) =>
+      blk?.content?.map((c: any) => c?.text ?? "").join("")
+    ).join("") ?? "");
+
+  logger.info('OpenAI response payload:', JSON.stringify(openaiResponseBody, null, 2));
+
+  if ((openaiResponseBody as any).tool_calls) {
+    logger.info('Tool calls requested:', (openaiResponseBody as any).tool_calls);
+  }
+
+  if (openaiResponseBody.id) {
+    updatePreviousResponseId(userId, openaiResponseBody.id);
+  }
+
+  if (respText) {
+    updateHistory(userId, [...getHistory(userId), { role: 'assistant', content: respText }]);
+  }
+  return chatResponse;
+}
+
+/**
+ * Checks if a model is a reasoning model.
+ * @function isReasoningModel
+ * @param {string} model - The model name to check
+ * @returns {boolean} True if the model is a reasoning model
+ */
 function isReasoningModel(model: string) {
   return /^(o\d|gpt-5)/i.test(model);
 }
 
+/**
+ * Checks if a model supports sampling parameters.
+ * @function supportsSamplingKnobs
+ * @param {string} model - The model name to check
+ * @returns {boolean} True if the model supports sampling parameters
+ */
 function supportsSamplingKnobs(model: string) {
   return !isReasoningModel(model);
 }

@@ -1,8 +1,20 @@
+/**
+ * Module for Supabase authentication and JWT validation.
+ * @module supabaseService
+ */
+
 import { createClient } from '@supabase/supabase-js';
 import { getConfig } from '../config';
 import { logger } from '../logger';
 
-export async function validateSupabaseJWT(jwt: string): Promise<boolean> {
+/**
+ * Validates a Supabase JWT token.
+ * @async
+ * @function validateSupabaseJWT
+ * @param {string|any} jwt - The JWT token to validate
+ * @returns {Promise<boolean>} True if the token is valid
+ */
+export async function validateSupabaseJWT(jwt: string | any): Promise<boolean> {
   try {
     const config = getConfig();
     const supabase = createClient(

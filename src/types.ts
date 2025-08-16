@@ -1,9 +1,13 @@
 import { OpenAI } from "openai";
 
+/**
+ * this is payload we exect to be called with from SLUad
+ */
 export interface ChatRequest {
   text: string;
   temperature?: number;
   stream?: boolean;
+  supabase_jwt?: string | {}; // not used
   // tools?: OpenAI.Responses.FunctionTool[]  this is the OpenAI version
   tools?: FunctionTool[]  // this is my version without OpenAI dependency so it can be shared with the client;
 }
@@ -17,15 +21,22 @@ export type FunctionParameters = Record<string, unknown>;
 
 
 
+/**
+ * this is body we will send back to the client ie SLUad
+ */
 export interface ChatResponse {
-  output: Array<ResponseOutputMessage | ResponseFunctionToolCall>
+  /// this is the output exactl as we get it from OpenAI
+  output?: Array<ResponseOutputItem>;
+  /// this is directly the output_text from OpenAI
+  output_text: string;
   metadata: {
     timestamp: string;
     status: 'success' | 'error';
     error?: string;
   };
-  id: string;
+  id?: string;
 }
+export type ResponseOutputItem = ResponseOutputMessage | ResponseFunctionToolCall | ResponseOutputText | ResponseOutputRefusal;
 export interface ResponseOutputMessage {
   content: Array<ResponseOutputText | ResponseOutputRefusal>;
   role: 'assistant';

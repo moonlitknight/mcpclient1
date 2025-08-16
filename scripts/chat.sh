@@ -1,5 +1,12 @@
 #!/bin/bash
-# This script is used to submit an http request to the chat server.
+# 
+# @file chat.sh
+# @brief Script for submitting HTTP requests to the chat server
+# @description
+#   This script allows sending chat requests to the server with various parameters.
+#   It supports both streaming and non-streaming responses, and includes tool definitions
+#   for function calling capabilities.
+#
 # An example is curl -X POST -H 'Content-Type: application/json' -d '{"text":"This is the prompt", "supabase_jwt":"test2", "temperature":1, "stream":true}' -v localhost:3001/chat
 # The command line args are `chat.sh prop1=value1 prop2=value2 ... text`
 # An arg parameter is identified by it being a the front of the arg list, and it is a key-value pair separated by an equal sign and not containing and spaces.
@@ -79,7 +86,7 @@ text="$*"
 # now construct the curl command
 # set -x
 
-response=$(curl -s -X POST -H 'Content-Type: application/json' \
+response=$(curl -v -s -X POST -H 'Content-Type: application/json' \
   -d @- <<EOF \
   localhost:3001/chat
 {
@@ -97,7 +104,6 @@ echo "Raw response:"
 echo "$response"
 
 # Extract and print response content if present
-if [[ "$response" == *'"response":'* ]]; then
-  echo -e "\nResponse content:"
-  echo "$response" | jq -r '.response'
-fi
+  echo -e "\n ===================== Response content: ======================"
+  echo "$response" | jq -r '.output_text'
+  echo -e "\n =============================================================="

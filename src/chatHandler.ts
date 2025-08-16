@@ -24,10 +24,10 @@ export async function handleChatRequest(req: Request, res: Response): Promise<vo
     const isJwtValid = await validateSupabaseJWT(supabase_jwt);
 
     if (isJwtValid) {
-      const decodedToken = jwtDecode<DecodedToken>(supabase_jwt);
+      const decodedToken = jwtDecode<DecodedToken>(supabase_jwt as string);
       userId = decodedToken.email;
     } else {
-      userId = supabase_jwt;
+      userId = supabase_jwt as string;
     }
 
     const { temperature } = req.body as ChatRequest;
@@ -39,18 +39,20 @@ export async function handleChatRequest(req: Request, res: Response): Promise<vo
     }
 
     if (stream) {
-        res.setHeader('Content-Type', 'application/json');
-        await processChat(text, userId, requestConfig, stream, res, tools);
+      res.setHeader('Content-Type', 'application/json');
+      await processChat(text, userId, requestConfig, stream, res, tools);
     } else {
-        const openAiResponse = await processChat(text, userId, requestConfig, stream, res, tools);
-        const response: ChatResponse = {
-            response: openAiResponse as string,
-            metadata: {
-            timestamp: new Date().toISOString(),
-            status: 'success'
-            }
-        };
-        res.status(200).json(response);
+      const openAiResponse = await processChat(text, userId, requestConfig, stream, res, tools);
+      const response: ChatResponse = {
+        output: openAiResponse.output,
+        output_text: openAiResponse.output_text,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          status: 'success'
+        },
+        id: openAiResponse.id,
+      };
+      res.status(200).json(response);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -58,11 +60,21 @@ export async function handleChatRequest(req: Request, res: Response): Promise<vo
 
     if (!res.headersSent) {
       const response: ChatResponse = {
-        response: '',
+        output_text: '[ch84] Internal server error',
+        output: [{
+          content: [{
+            text: '',
+            type: 'output_text',
+            annotations: []
+          }],
+          role: 'assistant',
+          status: 'completed',
+          type: 'message'
+        }],
         metadata: {
           timestamp: new Date().toISOString(),
           status: 'error',
-          error: 'Internal server error'
+          error: '[ch84] Internal server error'
         }
       };
       res.status(500).json(response);
