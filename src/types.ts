@@ -1,3 +1,21 @@
+/**
+ *
+ *
+ *
+ *
+ *
+ *  This file is shared.
+ *  It should only be edited within tje mcp1 project and then copied to astrosb project.
+ *  After copying, comment out the import OpenAI line.
+ *
+ *  cp src/types.ts ../../sluroy/astrosb/src/types.ts
+ *
+ *
+ *
+ *
+ *
+ *
+ */
 import { OpenAI } from "openai";
 
 /**
@@ -9,7 +27,11 @@ export interface ChatRequest {
   stream?: boolean;
   supabase_jwt?: string | {}; // not used
   // tools?: OpenAI.Responses.FunctionTool[]  this is the OpenAI version
-  tools?: FunctionTool[]  // this is my version without OpenAI dependency so it can be shared with the client;
+  tools?: FunctionTool[];  // this is my version without OpenAI dependency so it can be shared with the client;
+  tool_outputs?: [{   // optional tool output is SLUad is responding to a function call request
+    "tool_call_id": string,
+    "output": string
+  }]
 }
 export interface FunctionTool {
   type: "function";

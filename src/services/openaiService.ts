@@ -35,6 +35,7 @@ export async function processChat(
   stream?: boolean,
   res?: Response,
   tools?: FunctionTool[],
+  tool_outputs?: { tool_call_id: string; output: string }[]
 ): Promise<ChatResponse> {
   try {
     const openai = getOpenAIClient();
@@ -46,8 +47,8 @@ export async function processChat(
     }
     history.push({ role: 'user', content: prompt });
 
-    const payload = createPayload(prompt, userIdJwt, config, stream, tools);
-    logger.info('OpenAI request payload (Responses):', JSON.stringify(payload, null, 2));
+    const payload = createPayload(prompt, userIdJwt, config, stream, tools, tool_outputs);
+    logger.info('OpenAI request payload (Responses API):', JSON.stringify(payload, null, 2));
 
     if (stream && res) {
       //@ts-ignore
@@ -80,13 +81,16 @@ function createPayload(
   userId: string,
   config: Config,
   stream?: boolean,
-  tools?: FunctionTool[]
+  tools?: FunctionTool[],
+  tool_outputs?: { tool_call_id: string; output: string }[]
 ): any {
+  // apply the correct OpenAI type to payload AI!
   const payload: any = {
     model: config.model,
     input: [],
     max_output_tokens: config.maxTokens ?? 800,
     stream: stream,
+    tool_outputs: tool_outputs || undefined,
   };
 
   const previousResponseId = getPreviousResponseId(userId);
