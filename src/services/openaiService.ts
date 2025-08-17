@@ -16,7 +16,7 @@ import { OutputItems } from 'openai/resources/evals/runs/output-items';
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
 /**
- * Processes a chat request, handling both streaming and standard responses.
+ * Processes a chat request, handling both streaming and standard results.
  * @async
  * @function processChat
  * @param {string} prompt - The user's input prompt
@@ -35,7 +35,7 @@ export async function processChat(
   stream?: boolean,
   res?: Response,
   tools?: FunctionTool[],
-  tool_outputs?: { tool_call_id: string; output: string }[]
+  tool_outputs?: { call_id: string; output: string }[]
 ): Promise<ChatResponse> {
   try {
     const openai = getOpenAIClient();
@@ -48,7 +48,10 @@ export async function processChat(
     history.push({ role: 'user', content: prompt });
 
     const payload = createPayload(prompt, userIdJwt, config, stream, tools, tool_outputs);
-    logger.info('OpenAI request payload (Responses API):', JSON.stringify(payload, null, 2));
+    // log the payload for debugging purposes. Colorize it to be in green
+    console.log('\x1b[32m%s\x1b[0m', 'OpenAI request payload:' + JSON.stringify(payload, null, 2));
+    // reset the terminal color afterwards
+    console.log('\x1b[0m');
 
     if (stream && res) {
       //@ts-ignore
@@ -82,21 +85,27 @@ function createPayload(
   config: Config,
   stream?: boolean,
   tools?: FunctionTool[],
-  tool_outputs?: { tool_call_id: string; output: string }[]
-): any {
-  // apply the correct OpenAI type to payload AI!
+  tool_outputs?: { call_id: string; output: string }[]
+): OpenAI.Responses.Response {
   const payload: any = {
     model: config.model,
     input: [],
     max_output_tokens: config.maxTokens ?? 800,
     stream: stream,
-    tool_outputs: tool_outputs || undefined,
   };
 
   const previousResponseId = getPreviousResponseId(userId);
   if (previousResponseId) {
     payload.previous_response_id = previousResponseId;
-    payload.input = [{ role: 'user', content: prompt }];
+  }
+
+  // if we are called with tool_outputsm then this means we are responding to a function call request which changes the input structure
+  if (tool_outputs && tool_outputs.length > 0) {
+    payload.input = tool_outputs;
+    // add a property `type:"function_call_output"` to each tool output item
+    payload.input.forEach((output: any) => {
+      output.type = "function_call_output";
+    });
   } else {
     payload.input = [
       { role: 'system', content: config.systemPrompt },
@@ -196,6 +205,10 @@ async function processNonStreamResponse(
       status: 'success',
     },
   };
+  // log the response  for debugging purposes. Colorize it to be in pink
+  console.log('\x1b[35m%s\x1b[0m', 'mcp1 OpenAI response body:' + JSON.stringify(openaiResponseBody, null, 2));
+  // reset the terminal color afterwards
+  console.log('\x1b[0m');
   chatResponse.output = openaiResponseBody.output as ResponseOutputItem[];
   chatResponse.output_text = openaiResponseBody.output_text || '';
   const respText =
@@ -204,7 +217,7 @@ async function processNonStreamResponse(
       blk?.content?.map((c: any) => c?.text ?? "").join("")
     ).join("") ?? "");
 
-  logger.info('OpenAI response payload:', JSON.stringify(openaiResponseBody, null, 2));
+  // logger.info('OpenAI response payload:', JSON.stringify(openaiResponseBody, null, 2));
 
   if ((openaiResponseBody as any).tool_calls) {
     logger.info('Tool calls requested:', (openaiResponseBody as any).tool_calls);

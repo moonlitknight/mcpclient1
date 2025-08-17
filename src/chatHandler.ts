@@ -23,12 +23,16 @@ interface DecodedToken {
  */
 export async function handleChatRequest(req: Request, res: Response): Promise<void> {
   try {
+    // Log the incoming request for debugging purposes - colorize the output to be in cyan and reset the color afterwards
+    console.log('\x1b[36m%s\x1b[0m', 'mcp1 Received chat request:' + JSON.stringify(req.body));
+    // reset the terminal color 
+    console.log('\x1b[0m');
     // Pull expected properties from the request body
     const { text, supabase_jwt, stream, tools, tool_outputs } = req.body as ChatRequest;
 
     // Validate required inputs early and return 400 if missing
-    if (!text || !supabase_jwt) {
-      res.status(400).json({ error: 'Missing required fields: text and supabase_jwt are required' });
+    if (!supabase_jwt) {
+      res.status(400).json({ error: 'Missing required fields: supabase_jwt are required' });
       return;
     }
 
