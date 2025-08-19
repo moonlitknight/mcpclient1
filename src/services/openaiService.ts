@@ -12,6 +12,7 @@ import { getHistory, updateHistory, getPreviousResponseId, updatePreviousRespons
 import { getOpenAIClient } from './openaiClient';
 import { ChatResponse, FunctionTool, ResponseOutputItem } from '../types';
 import { OutputItems } from 'openai/resources/evals/runs/output-items';
+import { ResponseInputItem } from 'openai/resources/responses/responses';
 
 type Msg = { role: "system" | "user" | "assistant"; content: string };
 
@@ -57,7 +58,7 @@ export async function processChat(
       //@ts-ignore
       return await processStreamResponse(openai, payload, userIdJwt, res);
     } else {
-      return await processNonStreamResponse(openai, payload, userIdJwt);
+      return await processNonStreamResponse(openai, payload, userIdJwt, config);
     }
   } catch (error) {
     logger.error('OpenAI request failed', error instanceof Error ? error : new Error(String(error)));
@@ -107,10 +108,12 @@ function createPayload(
       output.type = "function_call_output";
     });
   } else {
-    payload.input = [
-      { role: 'system', content: config.systemPrompt },
-      { role: 'user', content: prompt }
-    ];
+    payload.input = [];
+    // if this is the first response in the conversation, add the system prompt
+    if (!previousResponseId) {
+      payload.input.push({ role: 'system', content: config.systemPrompt });
+    }
+    payload.input.push({ role: 'user', content: prompt });
   }
 
   if (tools) {
@@ -194,9 +197,30 @@ async function processStreamResponse(
 async function processNonStreamResponse(
   openai: OpenAI,
   payload: any,
-  userId: string
+  userId: string,
+  config: Config
 ): Promise<ChatResponse> {
-  const openaiResponseBody = await openai.responses.create(payload);
+  // ===== call OpenAI API =========================================
+  let openaiResponseBody;
+  try {
+    openaiResponseBody = await openai.responses.create(payload);
+  } catch (error: any) {  // this is all about catching the error caused by a missing runctional call answer
+    logger.error('[oai 204]OpenAI request failed', error instanceof Error ? error : new Error(String(error)));
+    logger.error('[oai 204]OpenAI request failed', error instanceof Error ? error : new Error(String(error)));
+    console.error('[oai 205] OpenAI request failed', openaiResponseBody);
+    console.error('[oai 206] OpenAI request failed', error);
+    console.error('[oai 206a] OpenAI request failed', error && error.error ? error.error.message : String(error));
+    if (error && error.error && error.error.message && error.error.message.includes('function call')) {
+      const functionErrorPayload = makeFunctionCallErrorPayload(error.error.message, payload, config);
+      try {
+        openaiResponseBody = await openai.responses.create(functionErrorPayload);
+      } catch (error2: any) {
+        logger.error('[oai 214] OpenAI request failed with function call error', error2 instanceof Error ? error2 : new Error(String(error2)));
+        console.error('[oai 215] OpenAI request failed with function call error', openaiResponseBody);
+      }
+    }
+  }
+  // ================================================================
   const chatResponse: ChatResponse = {
     output: [],
     output_text: '',
@@ -209,8 +233,8 @@ async function processNonStreamResponse(
   console.log('\x1b[35m%s\x1b[0m', 'mcp1 OpenAI response body:' + JSON.stringify(openaiResponseBody, null, 2));
   // reset the terminal color afterwards
   console.log('\x1b[0m');
-  chatResponse.output = openaiResponseBody.output as ResponseOutputItem[];
-  chatResponse.output_text = openaiResponseBody.output_text || '';
+  chatResponse.output = openaiResponseBody!.output as ResponseOutputItem[];
+  chatResponse.output_text = openaiResponseBody!.output_text || '';
   const respText =
     (openaiResponseBody as any).output_text ??
     ((openaiResponseBody as any).output?.map((blk: any) =>
@@ -223,14 +247,59 @@ async function processNonStreamResponse(
     logger.info('Tool calls requested:', (openaiResponseBody as any).tool_calls);
   }
 
-  if (openaiResponseBody.id) {
-    updatePreviousResponseId(userId, openaiResponseBody.id);
+  if (openaiResponseBody!.id) {
+    updatePreviousResponseId(userId, openaiResponseBody!.id);
   }
 
   if (respText) {
     updateHistory(userId, [...getHistory(userId), { role: 'assistant', content: respText }]);
   }
   return chatResponse;
+}
+
+/**
+ * This is necessary because OpenAI will refuse to process any prompts within a conversation until it receives a valid function call response.
+ * Normally that will not happen, but if it does we end up with an ugly client error condition for which there is no recovery without reloading the mcp1 server to
+ * reset the conversation.
+ * Takes the inital payload and the error message and creates a new payload for the function call error.
+ * The messages is of the form 'No tool output found for function call call_Zyy2Z9PgYUZUZ01B7iKppSkS.'
+ * wthe call id begins with 'call_' and is followed by a unique identifier.
+ * @param {string} errorMessage - The error message from the function call
+ * @param {any} payload - The original payload used for the function call
+ * @returns {any} The modified payload to include a tool response to satisfy OpenAI
+ */
+function makeFunctionCallErrorPayload(errorMessage: string, payload: any, config: Config): any {
+
+
+
+  const functionCallErrorPayload: OpenAI.Responses.ResponseCreateParams = {
+    ...payload,
+  };
+  // delete the previous_response_id if it exists and add a system prompt
+  delete functionCallErrorPayload.previous_response_id;
+  //@ ts-ignore
+  (<Array<ResponseInputItem>>functionCallErrorPayload.input).push({ role: 'system', content: config.systemPrompt });
+  /*
+   * All of this commented out code is trying to provide a function call response that will allow the convo to continue
+   * but there is something wrong with it and OpenAI spits it out with an error.
+  // parse the error message to extract the function call id
+  const call_id: string = errorMessage.match(/call_[a-zA-Z0-9]+/)![0];
+  console.info('call_id', call_id);
+  const functionCallErrorPayload: OpenAI.Responses.Response = {
+    ...payload,
+    input: [
+      {
+        type: "function_call_output",
+        call_id: call_id,
+        output: "No tool output found for function call " + call_id + ". This is a placeholder response to satisfy OpenAI's requirement for a function call response."
+      },
+    ],
+    tools: payload.tools,
+  };
+  console.warn('[oai 283] makeFunctionCallErrorPayload', functionCallErrorPayload);
+  */
+  console.warn('[oai 283] makeFunctionCallErrorPayload as json', JSON.stringify(functionCallErrorPayload));
+  return functionCallErrorPayload;
 }
 
 /**

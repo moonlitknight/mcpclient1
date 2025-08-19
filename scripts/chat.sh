@@ -16,7 +16,7 @@
 # Usage: chat.sh [prop1=value1] [prop2=value2] ... text goes here
 
 # Initialize variables
-supabase_jwt="test1"
+supabase_jwt="test_curl"
 temperature="1"
 stream="false"
 text=""
@@ -53,7 +53,30 @@ TOOL_JSON=$(cat <<'EOF'
         "additionalProperties": false
     },
     "strict": true
-}
+    }
+    ,
+    {
+        "type": "function",
+        "name": "get_trial_balance",
+        "description": "Retrieves the trial balance between the supplied dates. Format is a TSV table with headers: account_number, account_name, openning_balance, period_debits, period_credits, closing_balance. To obtain the current balance, use the start_date as the first day of this calendar year and the end_date as today.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "start_date": {
+                    "type": "string",
+                    "description": "The start date for the trial balance in YYYY-MM-DD format. Typically the first day of the financial year. Format is YYYY-MM-DD."
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "The end date for the trial balance in YYYY-MM-DD format. Typically the last day of the financial year. Format is YYYY-MM-DD."
+                }
+            },
+            "required": ["start_date", "end_date"],
+            "additionalProperties": false
+        },
+        "strict": true
+    }
+
 ]
 EOF
 )
