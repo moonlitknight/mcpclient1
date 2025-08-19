@@ -269,9 +269,7 @@ async function processNonStreamResponse(
  * @returns {any} The modified payload to include a tool response to satisfy OpenAI
  */
 function makeFunctionCallErrorPayload(errorMessage: string, payload: any, config: Config): any {
-
-
-
+  // this live version of the fix works by clearing the previous_response_id and adding a system prompt
   const functionCallErrorPayload: OpenAI.Responses.ResponseCreateParams = {
     ...payload,
   };
