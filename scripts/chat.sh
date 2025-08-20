@@ -111,10 +111,9 @@ text="$*"
 
 response=$(curl -v -s -X POST -H 'Content-Type: application/json' \
   -d @- <<EOF \
-  localhost:3001/chat
+  localhost:3001/chat?t=$supabase_jwt
 {
   "text": "$text",
-  "supabase_jwt": "$supabase_jwt",
   "temperature": $temperature,
   "stream": $stream,
   "tools": $TOOL_JSON

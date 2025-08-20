@@ -27,12 +27,14 @@ export async function handleChatRequest(req: Request, res: Response): Promise<vo
     console.log('\x1b[36m%s\x1b[0m', 'mcp1 Received chat request:' + JSON.stringify(req.body));
     // reset the terminal color 
     console.log('\x1b[0m');
-    // Pull expected properties from the request body
-    const { text, supabase_jwt, stream, tools, tool_outputs } = req.body as ChatRequest;
+    // Pull expected properties from the request body (supabase_jwt is provided via ?t=token query parameter)
+    const { text, stream, tools, tool_outputs } = req.body as ChatRequest;
+    // Extract supabase_jwt from the URL query parameter `t`
+    const supabase_jwt = typeof (req.query as any).t === 'string' ? (req.query as any).t : undefined;
 
     // Validate required inputs early and return 400 if missing
     if (!supabase_jwt) {
-      res.status(400).json({ error: 'Missing required fields: supabase_jwt are required' });
+      res.status(400).json({ error: 'Missing required query parameter: t (token) is required' });
       return;
     }
 

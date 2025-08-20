@@ -13,8 +13,9 @@ import { getOpenAIClient } from './openaiClient';
 import { ChatResponse, FunctionTool, ResponseOutputItem } from '../types';
 import { OutputItems } from 'openai/resources/evals/runs/output-items';
 import { ResponseInputItem } from 'openai/resources/responses/responses';
+import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
-type Msg = { role: "system" | "user" | "assistant"; content: string };
+type Msg = ChatCompletionMessageParam;
 
 /**
  * Processes a chat request, handling both streaming and standard results.
