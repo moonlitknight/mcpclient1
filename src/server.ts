@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { logger } from './logger';
 import { handleChatRequest } from './chatHandler';
+import { handleHistoryRequest } from './historyHandler';
 import { Config } from './config';
 
 export function createApp(config: Config) {
@@ -16,6 +17,10 @@ export function createApp(config: Config) {
   // Main chat endpoint
   app.post('/chat', express.json(), async (req: Request, res: Response) => {
     await handleChatRequest(req, res);
+  });
+  // History endpoint
+  app.get('/history', express.json(), async (req: Request, res: Response) => {
+    await handleHistoryRequest(req, res);
   });
 
 
