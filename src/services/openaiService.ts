@@ -41,13 +41,18 @@ export async function processChat(
 ): Promise<ChatResponse> {
   try {
     const openai = getOpenAIClient();
-    const history = getHistory(userIdJwt);
+    // Retrieve and persist history so subsequent reads reflect appended messages
+    let history = getHistory(userIdJwt);
 
-    // Initialize history if empty
+    // Initialize history if empty and persist the initial system prompt
     if (history.length === 0) {
-      history.push({ role: 'system', content: config.systemPrompt });
+      history = [{ role: 'system', content: config.systemPrompt }];
+      updateHistory(userIdJwt, history);
     }
-    history.push({ role: 'user', content: prompt });
+
+    // Append the user prompt and persist immediately so later reads include it
+    history = [...history, { role: 'user', content: prompt }];
+    updateHistory(userIdJwt, history);
 
     const payload = createPayload(prompt, userIdJwt, config, stream, tools, tool_outputs);
     // log the payload for debugging purposes. Colorize it to be in green
