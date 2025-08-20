@@ -10,26 +10,46 @@ interface DecodedToken {
   email: string;
 }
 
+/**
+ * Handle an incoming chat request.
+ *
+ * This function validates the request body, attempts to validate and decode a Supabase JWT
+ * to determine the user id, applies any request-level configuration overrides (such as
+ * temperature), and then forwards the request to the OpenAI processing service. It supports
+ * both streaming and non-streaming responses.
+ *
+ * @param req - Express request containing a ChatRequest in req.body
+ * @param res - Express response used to send either a streaming response or a JSON payload
+ */
 export async function handleChatRequest(req: Request, res: Response): Promise<void> {
   try {
-    const { text, supabase_jwt, stream } = req.body as ChatRequest;
+    // Log the incoming request for debugging purposes - colorize the output to be in cyan and reset the color afterwards
+    console.log('\x1b[36m%s\x1b[0m', 'mcp1 Received chat request:' + JSON.stringify(req.body));
+    // reset the terminal color 
+    console.log('\x1b[0m');
+    // Pull expected properties from the request body
+    const { text, supabase_jwt, stream, tools, tool_outputs } = req.body as ChatRequest;
 
-    if (!text || !supabase_jwt) {
-      res.status(400).json({ error: 'Missing required fields: text and supabase_jwt are required' });
+    // Validate required inputs early and return 400 if missing
+    if (!supabase_jwt) {
+      res.status(400).json({ error: 'Missing required fields: supabase_jwt are required' });
       return;
     }
 
     let userId: string;
 
+    // Check whether the provided supabase_jwt is valid. If valid, decode it and use the
+    // contained email as the user identifier. Otherwise treat the provided value as a plain user id.
     const isJwtValid = await validateSupabaseJWT(supabase_jwt);
 
     if (isJwtValid) {
-      const decodedToken = jwtDecode<DecodedToken>(supabase_jwt);
+      const decodedToken = jwtDecode<DecodedToken>(supabase_jwt as string);
       userId = decodedToken.email;
     } else {
-      userId = supabase_jwt;
+      userId = supabase_jwt as string;
     }
 
+    // Allow request-level overrides (e.g. temperature) on top of the global config
     const { temperature } = req.body as ChatRequest;
     const defaultConfig = getConfig();
     const requestConfig = { ...defaultConfig };
@@ -38,31 +58,48 @@ export async function handleChatRequest(req: Request, res: Response): Promise<vo
       requestConfig.llmTemperature = temperature;
     }
 
+    // Streaming path: set appropriate headers and forward the response stream to the client
     if (stream) {
-        res.setHeader('Content-Type', 'application/json');
-        await processChat(text, userId, requestConfig, stream, res);
-    } else {
-        const openAiResponse = await processChat(text, userId, requestConfig, stream, res);
-        const response: ChatResponse = {
-            response: openAiResponse as string,
-            metadata: {
-            timestamp: new Date().toISOString(),
-            status: 'success'
-            }
-        };
-        res.status(200).json(response);
+      res.setHeader('Content-Type', 'application/json');
+      await processChat(text, userId, requestConfig, stream, res, tools);
+      return;
     }
+
+    // Non-streaming path: wait for a full response and send a structured ChatResponse
+    const openAiResponse = await processChat(text, userId, requestConfig, stream, res, tools, tool_outputs);
+    const response: ChatResponse = {
+      output: openAiResponse.output,
+      output_text: openAiResponse.output_text,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        status: 'success'
+      },
+      id: openAiResponse.id,
+    };
+    res.status(200).json(response);
   } catch (error) {
+    // Normalize error message and log with optional request id
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Chat request failed:', new Error(errorMessage), { requestId: (req as any).id });
 
+    // If headers haven't been sent, respond with a consistent ChatResponse error payload
     if (!res.headersSent) {
       const response: ChatResponse = {
-        response: '',
+        output_text: '[ch84] Internal server error',
+        output: [{
+          content: [{
+            text: '',
+            type: 'output_text',
+            annotations: []
+          }],
+          role: 'assistant',
+          status: 'completed',
+          type: 'message'
+        }],
         metadata: {
           timestamp: new Date().toISOString(),
           status: 'error',
-          error: 'Internal server error'
+          error: '[ch84] Internal server error'
         }
       };
       res.status(500).json(response);
