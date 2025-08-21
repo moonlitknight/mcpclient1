@@ -24,13 +24,13 @@ interface DecodedToken {
 export async function handleChatRequest(req: Request, res: Response): Promise<void> {
   try {
     // Log the incoming request for debugging purposes - colorize the output to be in cyan and reset the color afterwards
-    console.log('\x1b[36m%s\x1b[0m', 'mcp1 Received chat request:' + JSON.stringify(req.body));
-    // reset the terminal color 
-    console.log('\x1b[0m');
     // Pull expected properties from the request body (supabase_jwt is provided via ?t=token query parameter)
     const { text, stream, tools, tool_outputs } = req.body as ChatRequest;
     // Extract supabase_jwt from the URL query parameter `t`
     const supabase_jwt = typeof (req.query as any).t === 'string' ? (req.query as any).t : undefined;
+    console.log(`\x1b[36m [ch27] mcp1 Received chat request for user ${supabase_jwt}: ${JSON.stringify(req.body)} `);
+    // reset the terminal color 
+    console.log('\x1b[0m');
 
     // Validate required inputs early and return 400 if missing
     if (!supabase_jwt) {

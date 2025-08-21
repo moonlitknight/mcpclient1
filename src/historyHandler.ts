@@ -1,7 +1,5 @@
 import { Request, Response } from 'express';
-import { jwtDecode } from 'jwt-decode';
 import { logger } from './logger';
-import { validateSupabaseJWT } from './services/supabaseService';
 import { getHistory } from './services/cacheService';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
@@ -25,29 +23,19 @@ interface DecodedToken {
  */
 export async function handleHistoryRequest(req: Request, res: Response): Promise<void> {
   try {
-    // Log the incoming request for debugging purposes - colorize to cyan
-    console.log('\x1b[36m%s\x1b[0m', 'mcp1 Received history request:' + JSON.stringify(req.query));
+
+    // Extract email key from the URL query parameter `t`
+    const email = typeof (req.query as any).t === 'string' ? (req.query as any).t : undefined;
+    console.log(`\x1b[36m[hh32] mcp1 Received history request for user ${email}`);
+    // reset the terminal color 
     console.log('\x1b[0m');
 
-    // Extract supabase_jwt from the URL query parameter `t`
-    const supabase_jwt = typeof (req.query as any).t === 'string' ? (req.query as any).t : undefined;
-
-    if (!supabase_jwt) {
-      res.status(400).json({ error: 'Missing required query parameter: t (token) is required' });
+    if (!email) {
+      res.status(400).json({ error: 'Missing required query parameter: t (email key) is required' });
       return;
     }
 
-    let userId: string;
-    const isJwtValid = await validateSupabaseJWT(supabase_jwt);
-
-    if (isJwtValid) {
-      const decodedToken = jwtDecode<DecodedToken>(supabase_jwt as string);
-      userId = decodedToken.email;
-    } else {
-      userId = supabase_jwt as string;
-    }
-
-    const rawHistory: ChatCompletionMessageParam[] = getHistory(userId);
+    const rawHistory: ChatCompletionMessageParam[] = getHistory(email);
 
     const history = rawHistory.map((msg) => {
       // msg.content may be a string or more structured in different flows; handle common cases
@@ -66,6 +54,7 @@ export async function handleHistoryRequest(req: Request, res: Response): Promise
 
       return { text, direction } as { text: string; direction: 'in' | 'out' };
     });
+    console.log(`\x1b[36m[hh42] mcp1 Returning history for user ${email}: ${JSON.stringify(history)}`);
 
     res.status(200).json(history);
   } catch (error) {

@@ -32,7 +32,7 @@ type Msg = ChatCompletionMessageParam;
  */
 export async function processChat(
   prompt: string,
-  userIdJwt: string,
+  email: string,
   config: Config,
   stream?: boolean,
   res?: Response,
@@ -42,19 +42,19 @@ export async function processChat(
   try {
     const openai = getOpenAIClient();
     // Retrieve and persist history so subsequent reads reflect appended messages
-    let history = getHistory(userIdJwt);
+    let history = getHistory(email);
 
     // Initialize history if empty and persist the initial system prompt
     if (history.length === 0) {
       history = [{ role: 'system', content: config.systemPrompt }];
-      updateHistory(userIdJwt, history);
+      updateHistory(email, history);
     }
 
     // Append the user prompt and persist immediately so later reads include it
     history = [...history, { role: 'user', content: prompt }];
-    updateHistory(userIdJwt, history);
+    updateHistory(email, history);
 
-    const payload = createPayload(prompt, userIdJwt, config, stream, tools, tool_outputs);
+    const payload = createPayload(prompt, email, config, stream, tools, tool_outputs);
     // log the payload for debugging purposes. Colorize it to be in green
     console.log('\x1b[32m%s\x1b[0m', 'OpenAI request payload:' + JSON.stringify(payload, null, 2));
     // reset the terminal color afterwards
@@ -62,9 +62,9 @@ export async function processChat(
 
     if (stream && res) {
       //@ts-ignore
-      return await processStreamResponse(openai, payload, userIdJwt, res);
+      return await processStreamResponse(openai, payload, email, res);
     } else {
-      return await processNonStreamResponse(openai, payload, userIdJwt, config);
+      return await processNonStreamResponse(openai, payload, email, config);
     }
   } catch (error) {
     logger.error('OpenAI request failed', error instanceof Error ? error : new Error(String(error)));
@@ -88,7 +88,7 @@ export async function processChat(
  */
 function createPayload(
   prompt: string,
-  userId: string,
+  email: string,
   config: Config,
   stream?: boolean,
   tools?: FunctionTool[],
@@ -101,7 +101,7 @@ function createPayload(
     stream: stream,
   };
 
-  const previousResponseId = getPreviousResponseId(userId);
+  const previousResponseId = getPreviousResponseId(email);
   if (previousResponseId) {
     payload.previous_response_id = previousResponseId;
   }
@@ -154,7 +154,7 @@ function createPayload(
 async function processStreamResponse(
   openai: OpenAI,
   payload: any,
-  userId: string,
+  email: string,
   res: Response
 ): Promise<string> {
   console.warn('processStreamResponse is deprecated only because I havent tested it recently. It should still work.');
@@ -184,9 +184,9 @@ async function processStreamResponse(
   }
 
   if (responseId) {
-    updatePreviousResponseId(userId, responseId);
+    updatePreviousResponseId(email, responseId);
   }
-  updateHistory(userId, [...getHistory(userId), { role: 'assistant', content: fullResponse }]);
+  updateHistory(email, [...getHistory(email), { role: 'assistant', content: fullResponse }]);
   res.end();
   return fullResponse;
 }
@@ -203,7 +203,7 @@ async function processStreamResponse(
 async function processNonStreamResponse(
   openai: OpenAI,
   payload: any,
-  userId: string,
+  email: string,
   config: Config
 ): Promise<ChatResponse> {
   // ===== call OpenAI API =========================================
@@ -254,11 +254,11 @@ async function processNonStreamResponse(
   }
 
   if (openaiResponseBody!.id) {
-    updatePreviousResponseId(userId, openaiResponseBody!.id);
+    updatePreviousResponseId(email, openaiResponseBody!.id);
   }
 
   if (respText) {
-    updateHistory(userId, [...getHistory(userId), { role: 'assistant', content: respText }]);
+    updateHistory(email, [...getHistory(email), { role: 'assistant', content: respText }]);
   }
   return chatResponse;
 }

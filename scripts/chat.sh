@@ -16,7 +16,7 @@
 # Usage: chat.sh [prop1=value1] [prop2=value2] ... text goes here
 
 # Initialize variables
-supabase_jwt="test_curl"
+supabase_jwt="roy.smith.esq%2Baccounts@gmail.com"
 temperature="1"
 stream="false"
 text=""
