@@ -27,6 +27,7 @@ type Msg = ChatCompletionMessageParam;
  * @param {boolean} [stream] - Whether to use streaming response
  * @param {Response} [res] - Express response object for streaming
  * @param {FunctionTool[]} [tools] - Optional tools for function calling
+ * @param {string[]} [file_ids] - Optional array of file_ids to be merged into the request input.content
  * @returns {Promise<string>} - The processed response text
  * @throws {Error} If the chat request fails
  */
@@ -37,7 +38,8 @@ export async function processChat(
   stream?: boolean,
   res?: Response,
   tools?: FunctionTool[],
-  tool_outputs?: { call_id: string; output: string }[]
+  tool_outputs?: { call_id: string; output: string }[],
+  file_ids?: string[]
 ): Promise<ChatResponse> {
   try {
     const openai = getOpenAIClient();
@@ -59,7 +61,7 @@ export async function processChat(
     } else {
       updateHistory(email, history);
     }
-    const payload = createPayload(prompt, email, config, stream, tools, tool_outputs);
+    const payload = createPayload(prompt, email, config, stream, tools, tool_outputs, file_ids);
     // log the payload for debugging purposes. Colorize it to be in green
     console.log('\x1b[32m%s\x1b[0m', 'OpenAI request payload:' + JSON.stringify(payload, null, 2));
     // reset the terminal color afterwards
@@ -88,6 +90,7 @@ export async function processChat(
  * @param {Config} config - Configuration object
  * @param {boolean} [stream] - Whether to use streaming
  * @param {FunctionTool[]} [tools] - Optional tools for function calling
+ * @param {string[]} [file_ids] - Optional array of file_ids to be merged into the request input.content
  * @returns {Object} The constructed payload object
  *
  */
@@ -97,7 +100,8 @@ function createPayload(
   config: Config,
   stream?: boolean,
   tools?: FunctionTool[],
-  tool_outputs?: { call_id: string; output: string }[]
+  tool_outputs?: { call_id: string; output: string }[],
+  file_ids?: string[]
 ): OpenAI.Responses.Response {
   const payload: any = {
     model: config.model,
@@ -125,6 +129,19 @@ function createPayload(
       payload.input.push({ role: 'system', content: config.systemPrompt });
     }
     payload.input.push({ role: 'user', content: prompt });
+  }
+  // if we have file_ids, add them to the input.content
+  if (file_ids && file_ids.length > 0) {
+    let file_ids_content_item: { type: 'input_file', file_id: string } = { type: 'input_file', file_id: 'will be ovwerridden' };
+    const file_ids_content = [];
+    for (const file_id of file_ids) {
+      // create a new content item for each file_id
+      file_ids_content_item.file_id = file_id;
+      // push a clone of the file_ids_content_item to the file_ids_content array
+      file_ids_content_item = { ...file_ids_content_item };
+      file_ids_content.push(file_ids_content_item);
+    };
+    payload.input.push({ role: 'user', content: file_ids_content });
   }
 
   if (tools) {
