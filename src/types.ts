@@ -33,6 +33,7 @@ export interface ChatRequest {
     "output": string
   }],
   file_ids?: string[]; // optional file ids to be used in the request
+  vector_store_ids: string[]; // optional vector store ids to be used in the request
 }
 export interface FunctionTool {
   type: "function";

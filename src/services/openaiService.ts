@@ -39,7 +39,8 @@ export async function processChat(
   res?: Response,
   tools?: FunctionTool[],
   tool_outputs?: { call_id: string; output: string }[],
-  file_ids?: string[]
+  file_ids?: string[],
+  vector_store_ids?: string[]
 ): Promise<ChatResponse> {
   try {
     const openai = getOpenAIClient();
@@ -61,7 +62,7 @@ export async function processChat(
     } else {
       updateHistory(email, history);
     }
-    const payload = createPayload(prompt, email, config, stream, tools, tool_outputs, file_ids);
+    const payload = createPayload(prompt, email, config, stream, tools, tool_outputs, file_ids, vector_store_ids);
     // log the payload for debugging purposes. Colorize it to be in green
     console.log('\x1b[32m%s\x1b[0m', 'OpenAI request payload:' + JSON.stringify(payload, null, 2));
     // reset the terminal color afterwards
@@ -101,7 +102,8 @@ function createPayload(
   stream?: boolean,
   tools?: FunctionTool[],
   tool_outputs?: { call_id: string; output: string }[],
-  file_ids?: string[]
+  file_ids?: string[],
+  vector_store_ids?: string[]
 ): OpenAI.Responses.Response {
   const payload: any = {
     model: config.model,
@@ -144,8 +146,18 @@ function createPayload(
     payload.input.push({ role: 'user', content: file_ids_content });
   }
 
+  payload.tools = [];
   if (tools) {
     payload.tools = tools;
+  }
+
+  // if we have vector_store_ids, add them to the tools array 
+  if (vector_store_ids && vector_store_ids.length > 0) {
+    const vectorStoreTool = {
+      type: 'file_search',
+      vector_store_ids
+    };
+    payload.tools.push(vectorStoreTool);
   }
 
   if (isReasoningModel(config.model) && config.reasoningEffort) {

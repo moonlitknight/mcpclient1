@@ -25,7 +25,7 @@ export async function handleChatRequest(req: Request, res: Response): Promise<vo
   try {
     // Log the incoming request for debugging purposes - colorize the output to be in cyan and reset the color afterwards
     // Pull expected properties from the request body (supabase_jwt is provided via ?t=token query parameter)
-    const { text, stream, tools, tool_outputs, file_ids } = req.body as ChatRequest;
+    const { text, stream, tools, tool_outputs, file_ids, vector_store_ids } = req.body as ChatRequest;
     // Extract supabase_jwt from the URL query parameter `t`
     const supabase_jwt = typeof (req.query as any).t === 'string' ? (req.query as any).t : undefined;
     console.log(`\x1b[36m [ch27] mcp1 Received chat request for user ${supabase_jwt}: ${JSON.stringify(req.body)} `, req.body);
@@ -68,7 +68,7 @@ export async function handleChatRequest(req: Request, res: Response): Promise<vo
     }
 
     // Non-streaming path: wait for a full response and send a structured ChatResponse
-    const openAiResponse = await processChat(text, userId, requestConfig, stream, res, tools, tool_outputs, file_ids);
+    const openAiResponse = await processChat(text, userId, requestConfig, stream, res, tools, tool_outputs, file_ids, vector_store_ids);
     const response: ChatResponse = {
       output: openAiResponse.output,
       output_text: openAiResponse.output_text,
