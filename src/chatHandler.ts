@@ -28,7 +28,7 @@ export async function handleChatRequest(req: Request, res: Response): Promise<vo
     const { text, stream, tools, tool_outputs } = req.body as ChatRequest;
     // Extract supabase_jwt from the URL query parameter `t`
     const supabase_jwt = typeof (req.query as any).t === 'string' ? (req.query as any).t : undefined;
-    console.log(`\x1b[36m [ch27] mcp1 Received chat request for user ${supabase_jwt}: ${JSON.stringify(req.body)} `);
+    console.log(`\x1b[36m [ch27] mcp1 Received chat request for user ${supabase_jwt}: ${JSON.stringify(req.body)} `, req.body);
     // reset the terminal color 
     console.log('\x1b[0m');
 

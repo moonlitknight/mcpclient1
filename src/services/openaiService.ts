@@ -52,8 +52,13 @@ export async function processChat(
 
     // Append the user prompt and persist immediately so later reads include it
     history = [...history, { role: 'user', content: prompt }];
-    updateHistory(email, history);
-
+    // check if this prompt is a function call output, if so, do not store this in history. This is to prevent it being displayed in the client UI
+    if (tool_outputs && tool_outputs.length > 0) {
+      // do not store the function call output in history
+      console.info('[oai58] Skipping history update for function call output:', tool_outputs);
+    } else {
+      updateHistory(email, history);
+    }
     const payload = createPayload(prompt, email, config, stream, tools, tool_outputs);
     // log the payload for debugging purposes. Colorize it to be in green
     console.log('\x1b[32m%s\x1b[0m', 'OpenAI request payload:' + JSON.stringify(payload, null, 2));
@@ -69,9 +74,9 @@ export async function processChat(
   } catch (error) {
     logger.error('OpenAI request failed', error instanceof Error ? error : new Error(String(error)));
     if (res && !res.headersSent) {
-      res.status(500).json({ error: 'Failed to process chat request' });
+      res.status(500).json({ error: '[oai77] Failed to process chat request' });
     }
-    throw new Error('Failed to process chat request');
+    throw new Error('[oai77] Failed to process chat request');
   }
 }
 
