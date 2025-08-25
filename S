@@ -1,0 +1,12 @@
+#!/bin/bash
+# Run the production server
+export HOST=0.0.0.0 
+export PORT=8072 
+# check we are in the right directory by looking for S node_modules and dist
+if [ ! -d "node_modules" ] || [ ! -d "dist" ]; then
+  echo "Error: node_modules or dist directory not found!"
+  echo "S must be run as ./S from the sluad/astrosb directory"
+  exit 1
+fi
+../../node ./dist/index.js
+
