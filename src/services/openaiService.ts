@@ -13,8 +13,9 @@ import { getOpenAIClient } from './openaiClient';
 import { ChatResponse, FunctionTool, ResponseOutputItem } from '../types';
 import { OutputItems } from 'openai/resources/evals/runs/output-items';
 import { ResponseInputItem } from 'openai/resources/responses/responses';
+import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
-type Msg = { role: "system" | "user" | "assistant"; content: string };
+type Msg = ChatCompletionMessageParam;
 
 /**
  * Processes a chat request, handling both streaming and standard results.
@@ -26,29 +27,42 @@ type Msg = { role: "system" | "user" | "assistant"; content: string };
  * @param {boolean} [stream] - Whether to use streaming response
  * @param {Response} [res] - Express response object for streaming
  * @param {FunctionTool[]} [tools] - Optional tools for function calling
+ * @param {string[]} [file_ids] - Optional array of file_ids to be merged into the request input.content
  * @returns {Promise<string>} - The processed response text
  * @throws {Error} If the chat request fails
  */
 export async function processChat(
   prompt: string,
-  userIdJwt: string,
+  email: string,
   config: Config,
   stream?: boolean,
   res?: Response,
   tools?: FunctionTool[],
-  tool_outputs?: { call_id: string; output: string }[]
+  tool_outputs?: { call_id: string; output: string }[],
+  file_ids?: string[],
+  vector_store_ids?: string[]
 ): Promise<ChatResponse> {
   try {
     const openai = getOpenAIClient();
-    const history = getHistory(userIdJwt);
+    // Retrieve and persist history so subsequent reads reflect appended messages
+    let history = getHistory(email);
 
-    // Initialize history if empty
+    // Initialize history if empty and persist the initial system prompt
     if (history.length === 0) {
-      history.push({ role: 'system', content: config.systemPrompt });
+      history = [{ role: 'system', content: config.systemPrompt }];
+      updateHistory(email, history);
     }
-    history.push({ role: 'user', content: prompt });
 
-    const payload = createPayload(prompt, userIdJwt, config, stream, tools, tool_outputs);
+    // Append the user prompt and persist immediately so later reads include it
+    history = [...history, { role: 'user', content: prompt }];
+    // check if this prompt is a function call output, if so, do not store this in history. This is to prevent it being displayed in the client UI
+    if (tool_outputs && tool_outputs.length > 0) {
+      // do not store the function call output in history
+      console.info('[oai58] Skipping history update for function call output:', tool_outputs);
+    } else {
+      updateHistory(email, history);
+    }
+    const payload = createPayload(prompt, email, config, stream, tools, tool_outputs, file_ids, vector_store_ids);
     // log the payload for debugging purposes. Colorize it to be in green
     console.log('\x1b[32m%s\x1b[0m', 'OpenAI request payload:' + JSON.stringify(payload, null, 2));
     // reset the terminal color afterwards
@@ -56,16 +70,16 @@ export async function processChat(
 
     if (stream && res) {
       //@ts-ignore
-      return await processStreamResponse(openai, payload, userIdJwt, res);
+      return await processStreamResponse(openai, payload, email, res);
     } else {
-      return await processNonStreamResponse(openai, payload, userIdJwt, config);
+      return await processNonStreamResponse(openai, payload, email, config);
     }
   } catch (error) {
     logger.error('OpenAI request failed', error instanceof Error ? error : new Error(String(error)));
     if (res && !res.headersSent) {
-      res.status(500).json({ error: 'Failed to process chat request' });
+      res.status(500).json({ error: '[oai77] Failed to process chat request' });
     }
-    throw new Error('Failed to process chat request');
+    throw new Error('[oai77] Failed to process chat request');
   }
 }
 
@@ -77,16 +91,19 @@ export async function processChat(
  * @param {Config} config - Configuration object
  * @param {boolean} [stream] - Whether to use streaming
  * @param {FunctionTool[]} [tools] - Optional tools for function calling
+ * @param {string[]} [file_ids] - Optional array of file_ids to be merged into the request input.content
  * @returns {Object} The constructed payload object
  *
  */
 function createPayload(
   prompt: string,
-  userId: string,
+  email: string,
   config: Config,
   stream?: boolean,
   tools?: FunctionTool[],
-  tool_outputs?: { call_id: string; output: string }[]
+  tool_outputs?: { call_id: string; output: string }[],
+  file_ids?: string[],
+  vector_store_ids?: string[]
 ): OpenAI.Responses.Response {
   const payload: any = {
     model: config.model,
@@ -95,7 +112,7 @@ function createPayload(
     stream: stream,
   };
 
-  const previousResponseId = getPreviousResponseId(userId);
+  const previousResponseId = getPreviousResponseId(email);
   if (previousResponseId) {
     payload.previous_response_id = previousResponseId;
   }
@@ -115,9 +132,32 @@ function createPayload(
     }
     payload.input.push({ role: 'user', content: prompt });
   }
+  // if we have file_ids, add them to the input.content
+  if (file_ids && file_ids.length > 0) {
+    let file_ids_content_item: { type: 'input_file', file_id: string } = { type: 'input_file', file_id: 'will be ovwerridden' };
+    const file_ids_content = [];
+    for (const file_id of file_ids) {
+      // create a new content item for each file_id
+      file_ids_content_item.file_id = file_id;
+      // push a clone of the file_ids_content_item to the file_ids_content array
+      file_ids_content_item = { ...file_ids_content_item };
+      file_ids_content.push(file_ids_content_item);
+    };
+    payload.input.push({ role: 'user', content: file_ids_content });
+  }
 
+  payload.tools = [];
   if (tools) {
     payload.tools = tools;
+  }
+
+  // if we have vector_store_ids, add them to the tools array 
+  if (vector_store_ids && vector_store_ids.length > 0) {
+    const vectorStoreTool = {
+      type: 'file_search',
+      vector_store_ids
+    };
+    payload.tools.push(vectorStoreTool);
   }
 
   if (isReasoningModel(config.model) && config.reasoningEffort) {
@@ -148,7 +188,7 @@ function createPayload(
 async function processStreamResponse(
   openai: OpenAI,
   payload: any,
-  userId: string,
+  email: string,
   res: Response
 ): Promise<string> {
   console.warn('processStreamResponse is deprecated only because I havent tested it recently. It should still work.');
@@ -178,9 +218,9 @@ async function processStreamResponse(
   }
 
   if (responseId) {
-    updatePreviousResponseId(userId, responseId);
+    updatePreviousResponseId(email, responseId);
   }
-  updateHistory(userId, [...getHistory(userId), { role: 'assistant', content: fullResponse }]);
+  updateHistory(email, [...getHistory(email), { role: 'assistant', content: fullResponse }]);
   res.end();
   return fullResponse;
 }
@@ -197,7 +237,7 @@ async function processStreamResponse(
 async function processNonStreamResponse(
   openai: OpenAI,
   payload: any,
-  userId: string,
+  email: string,
   config: Config
 ): Promise<ChatResponse> {
   // ===== call OpenAI API =========================================
@@ -248,11 +288,11 @@ async function processNonStreamResponse(
   }
 
   if (openaiResponseBody!.id) {
-    updatePreviousResponseId(userId, openaiResponseBody!.id);
+    updatePreviousResponseId(email, openaiResponseBody!.id);
   }
 
   if (respText) {
-    updateHistory(userId, [...getHistory(userId), { role: 'assistant', content: respText }]);
+    updateHistory(email, [...getHistory(email), { role: 'assistant', content: respText }]);
   }
   return chatResponse;
 }

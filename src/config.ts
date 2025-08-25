@@ -21,7 +21,7 @@ export interface Config {
 
 let config: Config =
 {
-  httpPort: 3001,
+  httpPort: 8072,
   openaiKey: '',
   llmTemperature: 0.66,
   maxTokens: 11150,

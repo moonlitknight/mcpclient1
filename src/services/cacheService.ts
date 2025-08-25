@@ -12,16 +12,17 @@ export function updateHistory(userId: string, history: ChatCompletionMessagePara
 }
 
 export function getPreviousResponseId(userId: string): string | undefined {
-    return responseIdCache.get(userId);
+  return responseIdCache.get(userId);
 }
 
 export function updatePreviousResponseId(userId: string, responseId: string) {
-    responseIdCache.set(userId, responseId);
+  responseIdCache.set(userId, responseId);
 }
 
-export function clearHistory(userId: string) {
+export function clearHistory(userId: string): ChatCompletionMessageParam[] {
   chatHistoryCache.delete(userId);
   responseIdCache.delete(userId);
+  return getHistory(userId);
 }
 
 export function clearAllHistory() {
