@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { logger } from './logger';
-import { getHistory } from './services/cacheService';
+import { getHistory, clearHistory } from './services/cacheService';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 interface DecodedToken {
@@ -35,7 +35,17 @@ export async function handleHistoryRequest(req: Request, res: Response): Promise
       return;
     }
 
-    const rawHistory: ChatCompletionMessageParam[] = getHistory(email);
+    let rawHistory: ChatCompletionMessageParam[] = [];
+    // check the request for a clearhistory query parameter , and if present, call clearHistory(email) and return an empty array
+    if ((req.query as any).clearhistory === 'true') {
+      rawHistory = clearHistory(email);
+      console.log(`\x1b[36m[hh34] mcp1 Cleared history for user ${email}`);
+      // reset the terminal color 
+      console.log('\x1b[0m');
+      res.status(200).json([]);
+      return;
+    }
+    rawHistory = getHistory(email);
 
     const history = rawHistory.map((msg) => {
       // msg.content may be a string or more structured in different flows; handle common cases
