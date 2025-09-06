@@ -8,5 +8,5 @@ if [ ! -d "node_modules" ] || [ ! -d "dist" ]; then
   echo "S must be run as ./S from the sluad/astrosb directory"
   exit 1
 fi
-../../node ./dist/index.js
+../../node ./dist/index.js --servername=mcp1
 
