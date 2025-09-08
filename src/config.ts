@@ -32,7 +32,7 @@ let config: Config =
   supabaseAnonKey: '',
   supabaseProjectRef: '',
   systemPrompt: 'You are a helpful assistant.',
-  model: 'gpt-3.5-turbo',
+  model: 'gpt-3.5-turbo', // NB Model set in .env. Not sure what this is for.
   reasoningEffort: 'medium' // Default to medium; can be overridden in .env
 };
 
