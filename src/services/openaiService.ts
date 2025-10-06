@@ -14,6 +14,7 @@ import { ChatResponse, FunctionTool, ResponseOutputItem } from '../types';
 import { OutputItems } from 'openai/resources/evals/runs/output-items';
 import { ResponseInputItem } from 'openai/resources/responses/responses';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { getDeveloperPrompt } from './cacheService';
 
 type Msg = ChatCompletionMessageParam;
 
@@ -21,7 +22,7 @@ type Msg = ChatCompletionMessageParam;
  * Processes a chat request, handling both streaming and standard results.
  * @async
  * @function processChat
- * @param {string} prompt - The user's input prompt
+ * @param {string} promptText - The user's input prompt
  * @param {string} userIdJwt - Unique identifier for the user using the Supabase JWT
  * @param {Config} config - Configuration object
  * @param {boolean} [stream] - Whether to use streaming response
@@ -32,7 +33,7 @@ type Msg = ChatCompletionMessageParam;
  * @throws {Error} If the chat request fails
  */
 export async function processChat(
-  prompt: string,
+  promptText: string,
   email: string,
   config: Config,
   stream?: boolean,
@@ -54,7 +55,7 @@ export async function processChat(
     }
 
     // Append the user prompt and persist immediately so later reads include it
-    history = [...history, { role: 'user', content: prompt }];
+    history = [...history, { role: 'user', content: promptText }];
     // check if this prompt is a function call output, if so, do not store this in history. This is to prevent it being displayed in the client UI
     if (tool_outputs && tool_outputs.length > 0) {
       // do not store the function call output in history
@@ -62,7 +63,7 @@ export async function processChat(
     } else {
       updateHistory(email, history);
     }
-    const payload = createPayload(prompt, email, config, stream, tools, tool_outputs, file_ids, vector_store_ids);
+    const payload = createPayload(promptText, email, config, stream, tools, tool_outputs, file_ids, vector_store_ids);
     // log the payload for debugging purposes. Colorize it to be in green
     console.log('\x1b[32m%s\x1b[0m', 'OpenAI request payload:' + JSON.stringify(payload, null, 2));
     // reset the terminal color afterwards
@@ -127,8 +128,10 @@ function createPayload(
   } else {
     payload.input = [];
     // if this is the first response in the conversation, add the system prompt
+    // and the developer prompt (that being a per user thing)
     if (!previousResponseId) {
       payload.input.push({ role: 'system', content: config.systemPrompt });
+      payload.input.push({ role: 'developer', content: getDeveloperPrompt(email) });
     }
     payload.input.push({ role: 'user', content: prompt });
   }
