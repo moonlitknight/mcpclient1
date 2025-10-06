@@ -33,7 +33,7 @@ export function createApp(config: Config) {
     }
 
     const developerPrompt = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    console.log(`\x1b[36m[hh32] with a body of ${developerPrompt}`, req);
+    console.log(`\x1b[36m[hh32] with a body of ${developerPrompt}`);
     try {
       setDeveloperPrompt(email, developerPrompt);
       res.status(200).json({ status: 'ok' });
