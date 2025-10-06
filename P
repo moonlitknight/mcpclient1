@@ -1,0 +1,6 @@
+#!/bin/bash
+# Publish to my server
+TARGET=/usr/app/tmp/sluad
+TARGET=ec2e:/shared/jails/pt_jail/shared/nodeapps/sluad/mcp1
+rsync -avz  S .env .system_prompt .mcp_config.json dist node_modules $TARGET
+

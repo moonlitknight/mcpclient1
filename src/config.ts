@@ -21,7 +21,7 @@ export interface Config {
 
 let config: Config =
 {
-  httpPort: 3001,
+  httpPort: 8072,
   openaiKey: '',
   llmTemperature: 0.66,
   maxTokens: 11150,
@@ -32,7 +32,7 @@ let config: Config =
   supabaseAnonKey: '',
   supabaseProjectRef: '',
   systemPrompt: 'You are a helpful assistant.',
-  model: 'gpt-3.5-turbo',
+  model: 'gpt-3.5-turbo', // NB Model set in .env. Not sure what this is for.
   reasoningEffort: 'medium' // Default to medium; can be overridden in .env
 };
 

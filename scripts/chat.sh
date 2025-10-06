@@ -16,7 +16,7 @@
 # Usage: chat.sh [prop1=value1] [prop2=value2] ... text goes here
 
 # Initialize variables
-supabase_jwt="test_curl"
+supabase_jwt="roy.smith.esq%2Baccounts@gmail.com"
 temperature="1"
 stream="false"
 text=""
@@ -111,10 +111,9 @@ text="$*"
 
 response=$(curl -v -s -X POST -H 'Content-Type: application/json' \
   -d @- <<EOF \
-  localhost:3001/chat
+  localhost:3001/chat?t=$supabase_jwt
 {
   "text": "$text",
-  "supabase_jwt": "$supabase_jwt",
   "temperature": $temperature,
   "stream": $stream,
   "tools": $TOOL_JSON
